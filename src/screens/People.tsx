@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatDate, formatWeekday } from '../domain/dates'
-import type { AppState, Employee, Point, User } from '../domain/types'
+import type { AppState, Department, Employee, Point, User } from '../domain/types'
 import { ROLE_LABELS, type RoleId } from '../domain/types'
 import { GRADES } from '../data/masters'
 import { useApp } from '../store/AppStore'
@@ -41,11 +41,12 @@ function pointName(state: AppState, pointId: string): string {
   return state.points.find((point) => point.pointId === pointId)?.name ?? pointId
 }
 
-type Tab = 'directory' | 'employees' | 'import' | 'points' | 'users' | 'calendar'
+type Tab = 'directory' | 'employees' | 'departments' | 'import' | 'points' | 'users' | 'calendar'
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'directory', label: 'SAP directory' },
   { id: 'employees', label: 'Incentive list' },
+  { id: 'departments', label: 'Departments' },
   { id: 'import', label: 'Sync from SAP' },
   { id: 'points', label: 'Points' },
   { id: 'users', label: 'Users' },
@@ -95,6 +96,7 @@ export default function People() {
       {tab === 'directory' && <DirectoryTab />}
       {tab === 'employees' && <EmployeesTab />}
       {tab === 'import' && <SapImport />}
+      {tab === 'departments' && <DepartmentsTab />}
       {tab === 'points' && <PointsTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'calendar' && <CalendarTab />}
@@ -1113,6 +1115,97 @@ function CalendarTab() {
             </tbody>
           </table>
         </div>
+      </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Departments
+// ---------------------------------------------------------------------------
+
+/**
+ * A department decides two things: whose marks apply to you, and which column of the rate
+ * table pays you. Changing the scoring mode changes where a whole department's total comes
+ * from, so it says plainly what each mode means rather than leaving two words to guess at.
+ */
+function DepartmentsTab() {
+  const { state, allow, write } = useApp()
+  const decision = allow('masterdata.manage')
+
+  const headcount = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const employee of state.employees) {
+      counts.set(employee.departmentId, (counts.get(employee.departmentId) ?? 0) + 1)
+    }
+    return counts
+  }, [state.employees])
+
+  return (
+    <>
+      <InfoNote>
+        <strong>Computed</strong> builds a total out of the seven KPIs. <strong>Submitted total</strong> takes one figure
+        out of 100 per person, entered on Period Marks — Maintenance and the support departments work that way. The rate
+        group picks the Production or Support column out of the rate table.
+      </InfoNote>
+
+      <div className="card mt-3 overflow-hidden">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th scope="col" className="th">Department</th>
+              <th scope="col" className="th w-36">Rate group</th>
+              <th scope="col" className="th w-48">Scored by</th>
+              <th scope="col" className="th w-24 text-right">People</th>
+              <th scope="col" className="th w-24">Active</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.departments.map((department) => (
+              <tr key={department.departmentId} className={department.active ? undefined : 'opacity-55'}>
+                <td className="td font-medium text-ink-900">{department.name}</td>
+                <td className="td">
+                  <select
+                    className="input py-1 text-xs"
+                    value={department.rateGroup}
+                    disabled={!decision.allowed}
+                    onChange={(event) =>
+                      write({
+                        kind: 'department.upsert',
+                        department: { ...department, rateGroup: event.target.value as Department['rateGroup'] },
+                        isNew: false,
+                      })
+                    }
+                  >
+                    <option value="Production">Production</option>
+                    <option value="Support">Support</option>
+                  </select>
+                </td>
+                <td className="td">
+                  <select
+                    className="input py-1 text-xs"
+                    value={department.scoringMode}
+                    disabled={!decision.allowed}
+                    onChange={(event) =>
+                      write({
+                        kind: 'department.upsert',
+                        department: { ...department, scoringMode: event.target.value as Department['scoringMode'] },
+                        isNew: false,
+                      })
+                    }
+                  >
+                    <option value="computed">Computed from the 7 KPIs</option>
+                    <option value="submittedTotal">Submitted total /100</option>
+                  </select>
+                </td>
+                <td className="td num text-ink-600">{headcount.get(department.departmentId) ?? 0}</td>
+                <td className="td">
+                  {department.active ? <Badge tone="good">Active</Badge> : <Badge tone="neutral">Inactive</Badge>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </>
   )

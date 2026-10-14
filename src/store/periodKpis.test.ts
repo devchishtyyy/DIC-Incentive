@@ -290,3 +290,91 @@ describe('what stands between the period and sign-off', () => {
     expect(periodBlockers(flagged, PERIOD)).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+
+describe('departments that submit one total instead', () => {
+  const MAINT = 'DEP-MAINT'
+
+  function withMaintenance(): AppState {
+    const base = stateWithMarks()
+    return applyWrite(base, { kind: 'employee.setDepartment', empIds: [2902], departmentId: MAINT }, exec).state
+  }
+
+  it('does not ask them for the KPI breakdown', () => {
+    const moved = withMaintenance()
+    const row = rowFor(moved, 2902)
+    expect(row.mode).toBe('submittedTotal')
+    expect(row.marks.waste).toBeNull()
+    expect(row.marks.attendance).toBeNull()
+    expect(row.missing).toEqual([])
+  })
+
+  it('blocks until the total is entered, and says only that', () => {
+    const moved = withMaintenance()
+    expect(rowFor(moved, 2902).blockers).toEqual(['Total out of 100 not entered.'])
+  })
+
+  it('reaches a total from the submitted figure', () => {
+    const moved = withMaintenance()
+    const scored = applyWrite(moved, { kind: 'submittedTotal.setMany', periodId: PERIOD, rows: [{ empId: 2902, total: 92 }] }, exec).state
+    const row = rowFor(scored, 2902)
+    expect(row.total).toBe(92)
+    expect(row.blockers).toEqual([])
+  })
+
+  it('takes the figures the workbook used last period', () => {
+    let moved = withMaintenance()
+    for (const total of [92, 95, 90, 90, 91, 81]) {
+      const scored = applyWrite(moved, { kind: 'submittedTotal.setMany', periodId: PERIOD, rows: [{ empId: 2902, total }] }, exec).state
+      expect(rowFor(scored, 2902).total).toBe(total)
+      moved = scored
+    }
+  })
+
+  it('refuses a total outside 0 to 100 rather than paying on it', () => {
+    const moved = withMaintenance()
+    for (const total of [-1, 101, 1000]) {
+      const scored = applyWrite(moved, { kind: 'submittedTotal.setMany', periodId: PERIOD, rows: [{ empId: 2902, total }] }, exec).state
+      expect(rowFor(scored, 2902).total, String(total)).toBeNull()
+    }
+  })
+
+  it('counts 0 as a real total, because it is one', () => {
+    const moved = withMaintenance()
+    const scored = applyWrite(moved, { kind: 'submittedTotal.setMany', periodId: PERIOD, rows: [{ empId: 2902, total: 0 }] }, exec).state
+    expect(rowFor(scored, 2902).total).toBe(0)
+    expect(rowFor(scored, 2902).blockers).toEqual([])
+  })
+
+  it('leaves the computed department untouched by its existence', () => {
+    const before = rowFor(stateWithMarks(), 1295).total
+    const after = rowFor(withMaintenance(), 1295).total
+    expect(after).toBe(before)
+  })
+
+  it('is kept out of the production average it is not part of', () => {
+    // 2902 has no rows. Moving them to a submitted-total department must not change the
+    // Production average, which is still 1295 on 20 and 2901 on 10.
+    const moved = withMaintenance()
+    const flagged = applyWrite(moved, { kind: 'employee.setOutputNotMeasured', empIds: [2901], value: false, reason: 'test' }, exec).state
+    expect(rowFor(flagged, 1295).marks.production).toBe(20)
+  })
+
+  it('audits the move between departments', () => {
+    const result = applyWrite(stateWithMarks(), { kind: 'employee.setDepartment', empIds: [2902], departmentId: MAINT }, exec)
+    expect(result.logs).toHaveLength(1)
+    expect(result.logs[0].oldValue).toBe('Production')
+    expect(result.logs[0].newValue).toBe('Maintenance')
+  })
+
+  it('both modes end at the same kind of total, so everything after them is single-path', () => {
+    const moved = withMaintenance()
+    const scored = applyWrite(moved, { kind: 'submittedTotal.setMany', periodId: PERIOD, rows: [{ empId: 2902, total: 92 }] }, exec).state
+    const flagged = applyWrite(scored, { kind: 'employee.setOutputNotMeasured', empIds: [2902], value: false, reason: 'test' }, exec).state
+
+    for (const row of periodKpis(flagged, PERIOD)) {
+      expect(row.total === null || (Number.isFinite(row.total) && row.total >= 0 && row.total <= 100), String(row.employee.empId)).toBe(true)
+    }
+  })
+})

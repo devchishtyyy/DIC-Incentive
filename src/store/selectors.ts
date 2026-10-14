@@ -29,6 +29,7 @@ import type {
   AppState,
   DailyEntry,
   Department,
+  DepartmentScoringMode,
   Employee,
   EmployeeMonthSummary,
   IsoDate,
@@ -481,6 +482,11 @@ export function checklistComplete(items: ChecklistItem[]): boolean {
 export interface PeriodKpiRow {
   employee: Employee
   department: Department | undefined
+  /**
+   * How this row reached its total. `computed` built it from the seven KPIs; for
+   * `submittedTotal` somebody typed one figure out of 100 and the KPI columns do not apply.
+   */
+  mode: DepartmentScoringMode
   /** The employee's own production score, before any department average stands in. */
   ownProduction: number | null
   /** True when the department average was used instead of their own output. */
@@ -492,6 +498,11 @@ export interface PeriodKpiRow {
   /** Reasons this row cannot go to sign-off. Empty means it is ready. */
   blockers: string[]
   overrides: KpiOverride[]
+}
+
+/** A submitted total has to be a real number in range before it counts as entered. */
+function isUsableTotal(total: number | null | undefined): total is number {
+  return typeof total === 'number' && Number.isFinite(total) && total >= 0 && total <= 100
 }
 
 function overrideFor(overrides: KpiOverride[], empId: number, kpi: string): KpiOverride | undefined {
@@ -539,14 +550,51 @@ export function periodKpis(state: AppState, periodId: string): PeriodKpiRow[] {
   // One average per department, over its measured employees only.
   const averageByDepartment = new Map<string, number | null>()
   for (const department of state.departments) {
+    if (department.scoringMode !== 'computed') continue
     const scores = employees
       .filter((employee) => employee.departmentId === department.departmentId && !employee.outputNotMeasured)
       .map((employee) => ownProduction.get(employee.empId) ?? null)
     averageByDepartment.set(department.departmentId, departmentAverage(scores))
   }
 
+  const submitted = state.submittedTotals.filter((t) => t.periodId === periodId)
+  const EMPTY_MARKS: KpiMarks = {
+    production: null,
+    waste: null,
+    variance: null,
+    quality: null,
+    ehs: null,
+    wcm5s: null,
+    attendance: null,
+  }
+
   return employees.map((employee) => {
     const department = state.departments.find((d) => d.departmentId === employee.departmentId)
+    const mode: DepartmentScoringMode = department?.scoringMode ?? 'computed'
+
+    /*
+     * Maintenance, Support Production and the support departments do not use the KPI
+     * breakdown at all — one total out of 100 per person, entered by the Office Executive.
+     * It leaves here as the same `total` a computed department produces, so everything
+     * downstream (Earned, the export, sign-off) stays single-path.
+     */
+    if (mode === 'submittedTotal') {
+      const row = submitted.find((t) => t.empId === employee.empId)
+      const total = isUsableTotal(row?.total) ? row!.total : null
+      return {
+        employee,
+        department,
+        mode,
+        ownProduction: null,
+        usedDepartmentAverage: false,
+        marks: EMPTY_MARKS,
+        total,
+        missing: [],
+        blockers: total === null ? ['Total out of 100 not entered.'] : [],
+        overrides: overrides.filter((o) => o.empId === employee.empId),
+      }
+    }
+
     const own = ownProduction.get(employee.empId) ?? null
     const departmentMean = averageByDepartment.get(employee.departmentId) ?? null
 
@@ -594,6 +642,7 @@ export function periodKpis(state: AppState, periodId: string): PeriodKpiRow[] {
     return {
       employee,
       department,
+      mode,
       ownProduction: own,
       usedDepartmentAverage,
       marks,

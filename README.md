@@ -32,6 +32,24 @@ A score never exceeds 20 — 4.75 batches against a target of 4 shows **118.8%**
 **20.00**, never 23.75. A day with no entry is never counted as a zero; absence belongs to
 the Attendance KPI in a later phase.
 
+### Departments, and the two ways a score is reached
+
+A department is the unit a HOD runs. It decides whose marks apply to you and which column
+of the rate table pays you — **Production** or **Support**.
+
+It also decides how your total is reached:
+
+- **Computed** — the seven KPIs added up. Production works this way.
+- **Submitted total** — one figure out of 100 per person, typed in on Period Marks.
+  Maintenance, Support Production and the support departments work this way; the workbook
+  never gives them a KPI breakdown.
+
+Both end at the same `total`, so everything downstream — Earned, sign-off, both exports —
+has a single path through it.
+
+This is **not** the Production Areas that Phase 1 removed. An Area grouped Points inside
+Production; a Department is an org unit, and sign-off stays one HOD signature per period.
+
 ### The incentive period
 
 **The 16th of one month to the 15th of the next** — not a calendar month. That span is
@@ -61,7 +79,7 @@ Navigation is grouped by when you use it, not by what the data is called.
 | Month end | **Review & sign-off** — checklist, two sign-offs, both return loops, step history | Office Exec, HOD, Ops |
 | Month end | **Export** — approved periods only, CSV and XLSX in Employee KPI sheet column order | Finance, Ops |
 | Setup | **Targets** — type default targets down the column; the HOD's dated changes with reason and history | HOD and Admin edit, others view |
-| Setup | **People** — SAP directory, incentive list with bulk MD approval, points, users, day calendar | Admin, MD |
+| Setup | **People** — SAP directory, incentive list with bulk MD approval, departments, points, users, day calendar | Admin, MD |
 | Setup | **Audit log** — who, when, what changed, old value, new value, reason | HOD, Ops, Finance, MD, Admin |
 | Setup | **Settings** — policy constants, open policy questions, permission matrix | Admin edits, all view |
 
