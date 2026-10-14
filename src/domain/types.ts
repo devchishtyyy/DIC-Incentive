@@ -7,6 +7,7 @@
  */
 
 import type { AppSettings, TargetChangeReason } from '../config/policy'
+import type { GradeBand, RateTable } from './rates'
 import type { SyncState } from './syncSchedule'
 
 export type IsoDate = string // YYYY-MM-DD
@@ -308,6 +309,29 @@ export interface KpiOverride {
   grantedAt: IsoDateTime
 }
 
+/**
+ * What a period was worth, frozen at the moment it locked.
+ *
+ * Rates get revised; the signed sheet is due for renewal in Dec 2026. Recomputing a locked
+ * period against a newer rate would silently restate what somebody was already paid, so the
+ * figures and the rate version that produced them are written down and read back verbatim.
+ */
+export interface PeriodSnapshot {
+  periodId: string
+  rateVersionId: string
+  lockedBy: string
+  lockedAt: IsoDateTime
+  rows: PeriodSnapshotRow[]
+}
+
+export interface PeriodSnapshotRow {
+  empId: number
+  total: number | null
+  approved: number | null
+  earned: number | null
+  band: string | null
+}
+
 // ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
@@ -323,6 +347,7 @@ export type AuditEntity =
   | 'DepartmentMarks'
   | 'Attendance'
   | 'SubmittedTotal'
+  | 'RateTable'
   | 'User'
   | 'DayCalendar'
   | 'Settings'
@@ -384,6 +409,12 @@ export interface AppState {
   submittedTotals: SubmittedTotal[]
   kpiOverrides: KpiOverride[]
   monthOverrides: MonthOverride[]
+  /** Rate tables, newest last. The one in force is the latest by effectiveFrom. */
+  rateTables: RateTable[]
+  /** Grade code to band. MD-editable, so an unseen grade is a data fix, not a release. */
+  gradeAliases: Record<string, GradeBand>
+  /** Frozen figures for locked periods, keyed by periodId. */
+  periodSnapshots: PeriodSnapshot[]
   auditLog: AuditLogEntry[]
   settings: AppSettings
   /** Maps the old Excel spellings onto one canonical point — used by a future import. */

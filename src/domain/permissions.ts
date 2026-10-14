@@ -66,6 +66,7 @@ export type Action =
   | 'masterdata.manage'
   | 'employee.approveAdd'
   | 'employee.setName'
+  | 'rates.edit'
   | 'periodMarks.edit'
   | 'periodMarks.view'
   | 'audit.view'
@@ -248,6 +249,13 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
      * explicit about that. The HOD can too, since they already correct entries and sign the
      * month off. The Admin is deliberately out: they maintain master data, not marks.
      */
+    /*
+     * The rate table and the grade bands are what everybody is paid from, so only the MD
+     * touches them. Not even the Admin: they maintain master data, and this is money.
+     */
+    case 'rates.edit':
+      return role === 'MD_CEO' ? ALLOW : deny('Only the MD can change pay rates or grade bands.')
+
     case 'periodMarks.edit': {
       if (grantFor(role, 'entry.edit') !== 'E') return deny(`${ROLE_SHORT[role]} does not enter period marks.`)
       if (resource.periodStatus === 'Locked') return deny('The period is Locked. Reopen it before changing any marks.')

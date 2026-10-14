@@ -26,13 +26,14 @@ import type {
   TargetRule,
 } from '../domain/types'
 import { periodsEndingAt } from '../domain/periods'
+import { DEFAULT_GRADE_ALIASES, RATE_TABLE_2025 } from '../domain/rates'
 import { DEFAULT_DEPARTMENT_ID, DEPARTMENTS, POINT_ALIASES, POINTS, USERS } from './masters'
 import { assignedPointIds, PLANT_ROSTER, SAP_EMP_ID_OFFSET } from './plantMasters'
 import { DEMO_EMPLOYEES } from './demoRoster'
 import { createRng } from './rng'
 import { INITIAL_SYNC_STATE } from '../domain/syncSchedule'
 
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 const SEED = 20260817
 
 /** The four demo periods — one in each workflow state (seeded scenario 10). */
@@ -606,6 +607,9 @@ export function buildBaseState(): AppState {
     submittedTotals: [],
     kpiOverrides: [],
     monthOverrides: [],
+    rateTables: [{ ...RATE_TABLE_2025, rows: RATE_TABLE_2025.rows.map((row) => ({ ...row })) }],
+    gradeAliases: { ...DEFAULT_GRADE_ALIASES },
+    periodSnapshots: [],
     auditLog: [],
     settings: { ...DEFAULT_SETTINGS },
     pointAliases: { ...POINT_ALIASES },

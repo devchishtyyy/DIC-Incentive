@@ -8,6 +8,8 @@ import type { AppSettings } from '../config/policy'
 import { DEFAULT_DEPARTMENT_ID } from '../data/masters'
 import { awaitingSapDetail } from '../data/plantMasters'
 import { restatePeriods } from '../domain/periods'
+import { currentRateTable, snapshotRowsFor } from './selectors'
+import type { GradeBand, RateTable } from '../domain/rates'
 import { describeSchedule, type SyncSchedule, type SyncStatus } from '../domain/syncSchedule'
 import type {
   ApprovalStep,
@@ -24,6 +26,7 @@ import type {
   IsoDate,
   MonthOverride,
   MonthPeriod,
+  PeriodSnapshot,
   Point,
   User,
 } from '../domain/types'
@@ -80,6 +83,9 @@ export type WriteOp =
   | { kind: 'employee.setOutputNotMeasured'; empIds: number[]; value: boolean; reason: string }
   | { kind: 'employee.setDepartment'; empIds: number[]; departmentId: string }
   | { kind: 'department.upsert'; department: Department; isNew: boolean }
+  // Money
+  | { kind: 'rates.setTable'; table: RateTable }
+  | { kind: 'rates.setAliases'; aliases: Record<string, GradeBand> }
   // Roster sync
   | { kind: 'sync.setSchedule'; schedule: SyncSchedule }
   | { kind: 'sync.saveMapping'; mapping: unknown }
@@ -494,8 +500,33 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
       audit('MonthPeriod', op.periodId, 'Operations Manager approved — month locked', 'HOD Signed', 'Locked', op.comment)
       const locked = withStep.entries.map((e) => (e.periodId === op.periodId && e.status !== 'Locked' ? { ...e, status: 'Locked' as const } : e))
       audit('DailyEntry', op.periodId, 'All rows locked', 'Submitted', 'Locked', 'Month approved')
+
+      /*
+       * Freeze the money as well as the rows.
+       *
+       * Locking the entries stops the scores moving, but Approved comes from a rate table
+       * that gets revised — the signed sheet is due for renewal in Dec 2026. Writing the
+       * figures and the rate version down means a later revision cannot restate what
+       * somebody has already been paid, which is the one thing a locked period must
+       * guarantee. `periodPay` reads this back verbatim instead of recomputing.
+       */
+      const rateVersionId = currentRateTable(state).versionId
+      const snapshot: PeriodSnapshot = {
+        periodId: op.periodId,
+        rateVersionId,
+        lockedBy: ctx.actorUserId,
+        lockedAt: ctx.now,
+        rows: snapshotRowsFor(state, op.periodId),
+      }
+      const payable = snapshot.rows.reduce((sum, row) => sum + (row.earned ?? 0), 0)
+      audit('MonthPeriod', op.periodId, 'Incentive frozen', '', `${snapshot.rows.length} people · PKR ${payable} · rates ${rateVersionId}`, 'Month locked')
+
       return {
-        state: { ...setPeriodStatus(withStep, op.periodId, 'Locked'), entries: locked },
+        state: {
+          ...setPeriodStatus(withStep, op.periodId, 'Locked'),
+          entries: locked,
+          periodSnapshots: [...state.periodSnapshots.filter((s) => s.periodId !== op.periodId), snapshot],
+        },
         logs,
         message: 'Month approved and locked. Finance can now export it.',
       }
@@ -504,10 +535,19 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
     case 'month.reopen': {
       const step = makeStep(op.periodId, 'Reopen', ctx, 'Reopened', op.reason)
       audit('MonthPeriod', op.periodId, 'Month reopened', 'Locked', 'Open', op.reason)
+      // The frozen figures go with it: a reopened period is live again by definition, and
+      // leaving the snapshot behind would show stale money beside editable scores.
+      if (state.periodSnapshots.some((s) => s.periodId === op.periodId)) {
+        audit('MonthPeriod', op.periodId, 'Frozen incentive discarded', 'frozen', 'recomputed live', op.reason)
+      }
       const unlocked = state.entries.map((e) => (e.periodId === op.periodId && e.status === 'Locked' ? { ...e, status: 'Submitted' as const } : e))
       audit('DailyEntry', op.periodId, 'Rows unlocked for correction', 'Locked', 'Submitted', op.reason)
       return {
-        state: { ...setPeriodStatus({ ...state, approvals: [...state.approvals, step] }, op.periodId, 'Open'), entries: unlocked },
+        state: {
+          ...setPeriodStatus({ ...state, approvals: [...state.approvals, step] }, op.periodId, 'Open'),
+          entries: unlocked,
+          periodSnapshots: state.periodSnapshots.filter((snap) => snap.periodId !== op.periodId),
+        },
         logs,
         message: 'Month reopened. The HOD has been notified.',
       }
@@ -1032,6 +1072,42 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
         logs,
         message: `${op.department.name} updated.`,
       }
+    }
+
+    // --- Money ------------------------------------------------------------
+    case 'rates.setTable': {
+      const current = state.rateTables[state.rateTables.length - 1]
+      for (const row of op.table.rows) {
+        const before = current?.rows.find((r) => r.siteGroup === row.siteGroup && r.rateGroup === row.rateGroup)
+        for (const band of ['B1', 'B2', 'B3'] as const) {
+          if (str(before?.[band]) !== str(row[band])) {
+            audit('RateTable', op.table.versionId, `${row.siteGroup} · ${row.rateGroup} · ${band}`, before?.[band] ?? '', row[band], op.table.note)
+          }
+        }
+      }
+      if (logs.length === 0) return { state, logs: [], message: '' }
+
+      /*
+       * A rate change never reaches a locked period: those read their frozen snapshot, so
+       * what somebody was already paid cannot be restated by a later revision.
+       */
+      return {
+        state: { ...state, rateTables: [...state.rateTables.filter((t) => t.versionId !== op.table.versionId), op.table] },
+        logs,
+        message: 'Rate table saved. Locked periods keep the rates they were approved on.',
+      }
+    }
+
+    case 'rates.setAliases': {
+      const before = state.gradeAliases
+      const codes = new Set([...Object.keys(before), ...Object.keys(op.aliases)])
+      for (const code of codes) {
+        if (str(before[code]) !== str(op.aliases[code])) {
+          audit('RateTable', 'gradeAliases', `Grade ${code}`, before[code] ?? '', op.aliases[code] ?? '')
+        }
+      }
+      if (logs.length === 0) return { state, logs: [], message: '' }
+      return { state: { ...state, gradeAliases: { ...op.aliases } }, logs, message: 'Grade bands saved.' }
     }
 
     // --- Roster sync ------------------------------------------------------

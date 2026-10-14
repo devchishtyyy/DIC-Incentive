@@ -50,6 +50,38 @@ has a single path through it.
 This is **not** the Production Areas that Phase 1 removed. An Area grouped Points inside
 Production; a Department is an org unit, and sign-off stays one HOD signature per period.
 
+### From a score to rupees
+
+```
+Approved = rate table[ site group × rate group × grade band ]
+Earned   = Approved × Total ÷ 100,  rounded half-up to whole PKR
+```
+
+The rate table is the signed Incentive Revision 2025/2026, versioned and **MD-only**.
+So is the grade-band table, and that matters: a pay grade that matches no band **refuses
+to pay** rather than guessing. Defaulting to the lowest band underpays, defaulting to the
+highest overpays, and either would be invisible — so an unmatched grade is a visible
+problem with an obvious fix, adding the code in Settings.
+
+That matching is less trivial than it looks. SuccessFactors returns
+`Hourly Worker Level (P3) (GRD.PIII)`, which carries **two codes that disagree**: the
+display code is arabic, the `GRD` token is roman, and it is the roman one on the signed
+sheet. Reading the display code would have silently mis-banded nine of the forty-two.
+`rates.test.ts` pins all ten real grade strings.
+
+**Locking freezes the money.** Rates get revised — the signed sheet is due for renewal in
+Dec 2026 — so a locked period stores its figures and the rate version that produced them,
+and reads them back verbatim. A later rate edit cannot restate what somebody was already
+paid. Reopening discards the snapshot, because a reopened period is live by definition.
+
+The period total is the **sum of the rounded amounts**, not a rounded sum: the payroll
+file is the per-person figures, and those are what must add up.
+
+**Not applied:** the probation 50% rule and joiner/leaver proration. Neither has been
+confirmed against what payroll does today, and both change what people are paid. The
+joining date, leaving date and probation flag are all stored, so adding them later needs
+no migration. Both are on the Settings open-questions list.
+
 ### The incentive period
 
 **The 16th of one month to the 15th of the next** — not a calendar month. That span is

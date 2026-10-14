@@ -25,6 +25,7 @@ import {
   type ValidationIssue,
 } from '../domain/calc'
 import { deadlineForPeriod, dateRange, daysBetween } from '../domain/dates'
+import { approvedFor, earnedFor, periodPayout, RATE_TABLE_2025, type GradeBand, type RateTable } from '../domain/rates'
 import type {
   AppState,
   DailyEntry,
@@ -35,6 +36,8 @@ import type {
   IsoDate,
   KpiOverride,
   MonthPeriod,
+  PeriodSnapshotRow,
+  RateGroup,
   Point,
 } from '../domain/types'
 
@@ -659,4 +662,90 @@ export function periodBlockers(state: AppState, periodId: string): Array<{ empId
   return periodKpis(state, periodId)
     .filter((row) => row.blockers.length > 0)
     .map((row) => ({ empId: row.employee.empId, name: displayName(row.employee), reasons: row.blockers }))
+}
+
+// ---------------------------------------------------------------------------
+// Money
+// ---------------------------------------------------------------------------
+
+export interface PeriodPayRow extends PeriodKpiRow {
+  band: GradeBand | null
+  /** The rate-table amount, before any per-employee override. */
+  rateAmount: number | null
+  approved: number | null
+  approvedOverridden: boolean
+  earned: number | null
+  /** Why there is no approved amount, when there is none. */
+  approvedProblem: string
+}
+
+/** The rate table in force: the latest by effective date. */
+export function currentRateTable(state: AppState): RateTable {
+  const sorted = [...state.rateTables].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))
+  return sorted[sorted.length - 1] ?? RATE_TABLE_2025
+}
+
+/**
+ * Every employee's pay for a period.
+ *
+ * A **locked** period is read back from its snapshot, not recomputed. Rates get revised and
+ * marks could in principle be reopened; neither may restate what somebody has already been
+ * paid. An unlocked period is computed live from the current rate table.
+ *
+ * Probation and joiner/leaver proration are deliberately absent — DIC has not confirmed
+ * that either is applied today, and both change what people are paid. Both are on the
+ * Settings open-questions list.
+ */
+export function periodPay(state: AppState, periodId: string): PeriodPayRow[] {
+  const rows = periodKpis(state, periodId)
+  const snapshot = state.periodSnapshots.find((s) => s.periodId === periodId)
+  const table = snapshot ? state.rateTables.find((t) => t.versionId === snapshot.rateVersionId) ?? currentRateTable(state) : currentRateTable(state)
+  const overrides = state.kpiOverrides.filter((o) => o.periodId === periodId && o.kpi === 'approved')
+
+  return rows.map((row) => {
+    const rateGroup: RateGroup = row.department?.rateGroup ?? 'Production'
+    const lookup = approvedFor(row.employee, rateGroup, table, state.gradeAliases)
+    const override = overrides.find((o) => o.empId === row.employee.empId)
+
+    const frozen = snapshot?.rows.find((r) => r.empId === row.employee.empId)
+    if (frozen) {
+      return {
+        ...row,
+        total: frozen.total,
+        band: (frozen.band as GradeBand | null) ?? lookup.band,
+        rateAmount: lookup.approved,
+        approved: frozen.approved,
+        approvedOverridden: Boolean(override),
+        earned: frozen.earned,
+        approvedProblem: frozen.approved === null ? lookup.reason : '',
+      }
+    }
+
+    const approved = override ? override.value : lookup.approved
+    return {
+      ...row,
+      band: lookup.band,
+      rateAmount: lookup.approved,
+      approved,
+      approvedOverridden: Boolean(override),
+      earned: earnedFor(approved, row.total),
+      approvedProblem: approved === null ? lookup.reason : '',
+    }
+  })
+}
+
+/** What the period pays in total — the sum of the rounded per-person amounts. */
+export function periodPayTotal(state: AppState, periodId: string): number {
+  return periodPayout(periodPay(state, periodId).map((row) => row.earned))
+}
+
+/** The snapshot to freeze when a period locks. */
+export function snapshotRowsFor(state: AppState, periodId: string): PeriodSnapshotRow[] {
+  return periodPay(state, periodId).map((row) => ({
+    empId: row.employee.empId,
+    total: row.total,
+    approved: row.approved,
+    earned: row.earned,
+    band: row.band,
+  }))
 }

@@ -6,16 +6,18 @@
  * Admin edits; every role can read.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RosterSyncPanel } from '../components/RosterSyncPanel'
 import { ASSUMPTIONS, BASE_INCENTIVE_RATES, PHASE_2_KPIS, type AppSettings } from '../config/policy'
-import { Badge, Field, GuardedButton, InfoNote, PageHeader, Tooltip } from '../components/ui'
+import { Badge, Field, GuardedButton, Icon, InfoNote, PageHeader, Tooltip } from '../components/ui'
 import { formatDate } from '../domain/dates'
+import { GRADE_BANDS, type GradeBand } from '../domain/rates'
 import { formatRupees } from '../domain/format'
 import { PERMISSION_MATRIX, type Capability } from '../domain/permissions'
 import { ROLE_SHORT, type RoleId } from '../domain/types'
 import { useApp } from '../store/AppStore'
+import { currentRateTable } from '../store/selectors'
 
 const NUMERIC_SETTINGS: Array<{ key: keyof AppSettings; label: string; hint: string; step?: number }> = [
   { key: 'scoreCap', label: 'Score cap', hint: 'Production / Output is 20 of the 100 incentive marks (policy section 5). A score can never exceed it.' },
@@ -302,6 +304,8 @@ export default function Settings() {
         <p className="border-t border-ink-200 px-4 py-2 text-xs text-ink-500">* A HOD sees and edits only their own Production Area.</p>
       </div>
 
+      <RateTablePanel />
+
       {/* --- Scope ------------------------------------------------------------- */}
       <div className="card card-pad mt-5">
         <h2 className="text-sm font-semibold text-ink-800">What Phase 1 does not do</h2>
@@ -371,5 +375,167 @@ export default function Settings() {
         </div>
       </div>
     </>
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+
+/**
+ * The rate table and the grade bands — MD only.
+ *
+ * Both are data, not code, so a grade nobody anticipated is fixed here rather than in a
+ * release. The alias table is the reason an unmatched grade can safely refuse to pay: there
+ * is somewhere to go and fix it.
+ */
+function RateTablePanel() {
+  const { state, allow, write } = useApp()
+  const decision = allow('rates.edit')
+  const table = currentRateTable(state)
+
+  const [draft, setDraft] = useState(() => table.rows.map((row) => ({ ...row })))
+  const [aliasCode, setAliasCode] = useState('')
+  const [aliasBand, setAliasBand] = useState<GradeBand>('B3')
+
+  useEffect(() => setDraft(table.rows.map((row) => ({ ...row }))), [table])
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(table.rows)
+
+  const aliasesByBand = GRADE_BANDS.map((band) => ({
+    band,
+    codes: Object.entries(state.gradeAliases)
+      .filter(([, value]) => value === band)
+      .map(([code]) => code)
+      .sort(),
+  }))
+
+  return (
+    <div className="card card-pad mt-5">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-800">Incentive rates</h2>
+          <p className="mt-0.5 text-xs text-ink-500">
+            {table.note} In force since {formatDate(table.effectiveFrom)} · version {table.versionId}.
+          </p>
+        </div>
+        <GuardedButton
+          decision={decision}
+          variant={dirty ? 'primary' : 'default'}
+          size="sm"
+          blockedReason={!dirty && decision.allowed ? 'Nothing has changed.' : undefined}
+          onClick={() => write({ kind: 'rates.setTable', table: { ...table, rows: draft } })}
+        >
+          Save rates
+        </GuardedButton>
+      </div>
+
+      <div className="mt-3 overflow-x-auto scroll-slim">
+        <table className="w-full min-w-[34rem] border-collapse">
+          <thead>
+            <tr>
+              <th scope="col" className="th">Site</th>
+              <th scope="col" className="th">Rate group</th>
+              {GRADE_BANDS.map((band) => (
+                <th key={band} scope="col" className="th w-28 text-right">{band}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {draft.map((row, index) => (
+              <tr key={`${row.siteGroup}|${row.rateGroup}`}>
+                <td className="td font-medium text-ink-900">{row.siteGroup}</td>
+                <td className="td text-ink-600">{row.rateGroup}</td>
+                {GRADE_BANDS.map((band) => (
+                  <td key={band} className="td">
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      className="input py-1 text-right font-mono tabular-nums"
+                      value={row[band]}
+                      disabled={!decision.allowed}
+                      aria-label={`${row.siteGroup} ${row.rateGroup} ${band}`}
+                      onChange={(event) =>
+                        setDraft((current) =>
+                          current.map((candidate, i) => (i === index ? { ...candidate, [band]: Number(event.target.value) } : candidate)),
+                        )
+                      }
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 border-t border-ink-200 pt-3">
+        <h3 className="text-sm font-semibold text-ink-800">Grade bands</h3>
+        <p className="mt-0.5 text-xs text-ink-500">
+          Which band a pay grade falls in. A grade that matches nothing here refuses to pay rather than guessing, so this
+          is where an unseen grade gets fixed.
+        </p>
+
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          {aliasesByBand.map(({ band, codes }) => (
+            <div key={band} className="rounded-md border border-ink-200 bg-ink-50 p-2.5">
+              <div className="text-xs font-semibold text-ink-700">{band}</div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {codes.map((code) => (
+                  <span key={code} className="inline-flex items-center gap-1 rounded bg-white px-1.5 py-0.5 font-mono text-[11px] text-ink-700">
+                    {code}
+                    {decision.allowed && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${code}`}
+                        className="text-ink-300 hover:text-bad-600"
+                        onClick={() => {
+                          const next = { ...state.gradeAliases }
+                          delete next[code]
+                          write({ kind: 'rates.setAliases', aliases: next })
+                        }}
+                      >
+                        <Icon name="close" className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {decision.allowed && (
+          <div className="mt-3 flex flex-wrap items-end gap-2">
+            <Field label="Grade code">
+              <input
+                className="input w-32 font-mono"
+                value={aliasCode}
+                placeholder="TE5"
+                onChange={(event) => setAliasCode(event.target.value.toUpperCase())}
+              />
+            </Field>
+            <Field label="Band">
+              <select className="input w-24" value={aliasBand} onChange={(event) => setAliasBand(event.target.value as GradeBand)}>
+                {GRADE_BANDS.map((band) => (
+                  <option key={band} value={band}>{band}</option>
+                ))}
+              </select>
+            </Field>
+            <button
+              type="button"
+              className="btn btn-default"
+              disabled={aliasCode.trim() === ''}
+              onClick={() => {
+                write({ kind: 'rates.setAliases', aliases: { ...state.gradeAliases, [aliasCode.trim()]: aliasBand } })
+                setAliasCode('')
+              }}
+            >
+              <Icon name="plus" className="h-3.5 w-3.5" /> Add grade
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
