@@ -15,7 +15,7 @@
  * If `current` is no longer in `order` (its row was deleted or filtered away), focus falls
  * to the nearest end in the direction of travel instead of vanishing.
  */
-export function nextRow(order: readonly string[], current: string, delta: number): string | null {
+export function nextRow<K>(order: readonly K[], current: K, delta: number): K | null {
   if (order.length === 0 || delta === 0) return null
 
   const from = order.indexOf(current)
@@ -27,6 +27,6 @@ export function nextRow(order: readonly string[], current: string, delta: number
 }
 
 /** True when there is somewhere to go — used to decide whether Tab should leave the grid. */
-export function hasRow(order: readonly string[], current: string, delta: number): boolean {
+export function hasRow<K>(order: readonly K[], current: K, delta: number): boolean {
   return nextRow(order, current, delta) !== null
 }

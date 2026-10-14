@@ -12,7 +12,7 @@ import { ROLE_LABELS } from '../domain/types'
 import { useApp } from '../store/AppStore'
 import { Icon, PeriodBadge, Toaster } from './ui'
 
-type IconName = 'grid' | 'chart' | 'signoff' | 'download' | 'target' | 'people' | 'history' | 'gear'
+type IconName = 'grid' | 'chart' | 'signoff' | 'download' | 'target' | 'people' | 'history' | 'gear' | 'clipboard'
 
 interface NavItem {
   to: string
@@ -33,6 +33,7 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
   {
     title: 'Month end',
     items: [
+      { to: '/period-marks', label: 'Period marks', screen: 'period-marks', icon: 'clipboard' },
       { to: '/month-end', label: 'Review & sign-off', screen: 'month-end', icon: 'signoff' },
       { to: '/export', label: 'Export', screen: 'export', icon: 'download' },
     ],

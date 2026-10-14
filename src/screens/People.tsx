@@ -472,6 +472,53 @@ function EmployeesTab() {
         >
           <Icon name="trash" className="h-3.5 w-3.5" /> Deactivate
         </GuardedButton>
+
+        <GuardedButton
+          decision={decision}
+          variant="default"
+          size="sm"
+          onClick={() =>
+            setConfirm({
+              title: `Mark ${selection.count} as not measured on output`,
+              body: (
+                <p>
+                  They take the <strong>department average</strong> as their Production Score instead of their own rows.
+                  This is for people whose job has no measured output — not for a month somebody happened to post nothing.
+                </p>
+              ),
+              confirmLabel: `Use department average for ${selection.count}`,
+              commentRequired: true,
+              commentLabel: 'Why their output is not measured',
+              onConfirm: (reason) => {
+                write({ kind: 'employee.setOutputNotMeasured', empIds: selection.selected, value: true, reason })
+                selection.clear()
+              },
+            })
+          }
+        >
+          Use department average
+        </GuardedButton>
+
+        <GuardedButton
+          decision={decision}
+          variant="default"
+          size="sm"
+          onClick={() =>
+            setConfirm({
+              title: `Score ${selection.count} on their own output`,
+              body: <p>They go back to being scored on their own production rows, and a period with no rows will block sign-off.</p>,
+              confirmLabel: 'Score on own output',
+              commentRequired: true,
+              commentLabel: 'Reason',
+              onConfirm: (reason) => {
+                write({ kind: 'employee.setOutputNotMeasured', empIds: selection.selected, value: false, reason })
+                selection.clear()
+              },
+            })
+          }
+        >
+          Score on own output
+        </GuardedButton>
       </BulkBar>
 
       <div className="card overflow-hidden">
@@ -487,7 +534,8 @@ function EmployeesTab() {
                   <th scope="col" className="th sticky top-0 bg-ink-50">Name</th>
                   <th scope="col" className="th sticky top-0 bg-ink-50 w-28">Pay grade</th>
                   <th scope="col" className="th sticky top-0 bg-ink-50 w-24">Site</th>
-                  <th scope="col" className="th sticky top-0 bg-ink-50 w-28">Role</th>
+                  <th scope="col" className="th sticky top-0 bg-ink-50 w-40">Department</th>
+                  <th scope="col" className="th sticky top-0 bg-ink-50 w-28">Scored on</th>
                   <th scope="col" className="th sticky top-0 bg-ink-50 w-28">Status</th>
                   <th scope="col" className="th sticky top-0 bg-ink-50 w-32">Incentive list</th>
                   <th scope="col" className="th sticky top-0 bg-ink-50 w-20 text-right">Entries</th>
@@ -511,8 +559,18 @@ function EmployeesTab() {
                       <NameCell employee={employee} empId={employee.empId} />
                     </td>
                     <td className="td text-ink-600">{employee.grade || '—'}</td>
-                    <td className="td text-ink-600">{employee.site}</td>
-                    <td className="td text-ink-600">{employee.role}</td>
+                    <td className="td text-ink-600">
+                      {state.departments.find((d) => d.departmentId === employee.departmentId)?.name ?? '—'}
+                    </td>
+                    <td className="td">
+                      {employee.outputNotMeasured ? (
+                        <Tooltip label="Takes the department average instead of their own production rows.">
+                          <Badge tone="neutral">Dept average</Badge>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xs text-ink-500">Own output</span>
+                      )}
+                    </td>
                     <td className="td">
                       <Badge tone={employee.status === 'Active' ? 'good' : employee.status === 'Probation' ? 'warn' : 'neutral'}>
                         {employee.status}
@@ -623,6 +681,37 @@ function EmployeeDialog({ employee, onClose }: { employee: Employee | null; onCl
         </Field>
         <Field label="Joining date">
           <input type="date" className="input" value={draft.joinDate} onChange={(event) => set({ joinDate: event.target.value })} />
+        </Field>
+
+        <Field label="Department" hint="Decides whose marks apply and which rate column pays them.">
+          <select
+            className="input"
+            value={draft.departmentId}
+            onChange={(event) => set({ departmentId: event.target.value })}
+          >
+            {state.departments
+              .filter((department) => department.active)
+              .map((department) => (
+                <option key={department.departmentId} value={department.departmentId}>
+                  {department.name} · {department.rateGroup}
+                </option>
+              ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Production Score"
+          hint="Somebody whose job has no measured output takes the department average. Never set this to cover a month where entries were simply missed."
+        >
+          <label className="flex items-center gap-2 text-sm text-ink-800">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={draft.outputNotMeasured}
+              onChange={(event) => set({ outputNotMeasured: event.target.checked })}
+            />
+            Output not measured — use the department average
+          </label>
         </Field>
         <Field label="Leaving date" hint="Leave blank while in service.">
           <input type="date" className="input" value={draft.leaveDate ?? ''} onChange={(event) => set({ leaveDate: event.target.value || null })} />

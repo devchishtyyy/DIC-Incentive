@@ -76,6 +76,17 @@ export interface Employee {
   status: EmployeeStatus
   /** The Points this employee works. Daily Entry offers these first. */
   pointIds: string[]
+  /** The department whose marks and rate group apply to them. */
+  departmentId: string
+  /**
+   * True for somebody whose output is not measured — no Point, no production rows — who
+   * takes the department average as their Production Score instead.
+   *
+   * Off unless somebody sets it, and never inferred from an absence of rows: an employee
+   * with no rows and no flag is far more likely to be a forgotten entry than an unmeasured
+   * job, so that case blocks submission rather than quietly paying a department average.
+   */
+  outputNotMeasured: boolean
   joinDate: IsoDate
   leaveDate: IsoDate | null
   /** Additions to the incentive list need MD approval (policy section 10). */
@@ -84,6 +95,33 @@ export interface Employee {
   requestedAt?: IsoDateTime
   approvedBy?: string
   approvedAt?: IsoDateTime
+  active: boolean
+}
+
+/**
+ * A department: the org unit that marks are set for, and that decides the pay rate group.
+ *
+ * Not the Production Areas Phase 1 removed. An Area grouped Points *inside* Production;
+ * a Department is the unit a HOD runs, that gets one set of waste/variance/quality/EHS/WCM
+ * marks per period, and whose rate group picks a column out of the rate table.
+ */
+export type RateGroup = 'Production' | 'Support'
+
+/**
+ * How a department's employees are scored.
+ *
+ * `computed` builds the total out of the seven KPIs. `submittedTotal` takes one figure out
+ * of 100 per employee — Maintenance and Support Production work that way, and the brief is
+ * explicit that they do not use the KPI breakdown at all.
+ */
+export type DepartmentScoringMode = 'computed' | 'submittedTotal'
+
+export interface Department {
+  departmentId: string
+  name: string
+  /** Picks the Production or Support column out of the rate table (rate sheet 2025/2026). */
+  rateGroup: RateGroup
+  scoringMode: DepartmentScoringMode
   active: boolean
 }
 
@@ -214,6 +252,63 @@ export interface MonthOverride {
 }
 
 // ---------------------------------------------------------------------------
+// The other six KPIs
+// ---------------------------------------------------------------------------
+
+/**
+ * One department's marks for one period.
+ *
+ * Waste and variance are entered as percentages and converted by the policy tables;
+ * quality, EHS and WCM are marks as given. Percentages are held in **integer hundredths**
+ * (2.83% is 283) so the table boundaries are exact — see `calc.ts`.
+ */
+export interface DepartmentMarks {
+  departmentId: string
+  periodId: string
+  wastePercentHundredths: number | null
+  /** Either a percentage to run through table 7.1… */
+  variancePercentHundredths: number | null
+  /** …or marks given directly, which wins when both are present. */
+  varianceMarksDirect: number | null
+  quality: number | null
+  ehs: number | null
+  wcm5s: number | null
+  updatedBy: string
+  updatedAt: IsoDateTime
+}
+
+/** Days absent for one employee in one period. Null means nobody has said yet; 0 is an answer. */
+export interface AttendanceRecord {
+  periodId: string
+  empId: number
+  daysAbsent: number | null
+  updatedBy: string
+  updatedAt: IsoDateTime
+}
+
+/** One employee's total out of 100, for a department that does not use the KPI breakdown. */
+export interface SubmittedTotal {
+  periodId: string
+  empId: number
+  total: number | null
+  updatedBy: string
+  updatedAt: IsoDateTime
+}
+
+/** A per-employee departure from the department's marks, or from the rate table. */
+export interface KpiOverride {
+  overrideId: string
+  periodId: string
+  empId: number
+  /** A KPI key, or 'approved' for the rate-table amount. */
+  kpi: string
+  value: number
+  reason: string
+  grantedBy: string
+  grantedAt: IsoDateTime
+}
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -224,6 +319,10 @@ export type AuditEntity =
   | 'Employee'
   | 'Point'
   | 'Area'
+  | 'Department'
+  | 'DepartmentMarks'
+  | 'Attendance'
+  | 'SubmittedTotal'
   | 'User'
   | 'DayCalendar'
   | 'Settings'
@@ -271,6 +370,7 @@ export interface AppState {
   schemaVersion: number
   users: User[]
   points: Point[]
+  departments: Department[]
   /** Everyone SAP knows about. Master data, not the incentive list. */
   directory: DirectoryEntry[]
   employees: Employee[]
@@ -279,6 +379,10 @@ export interface AppState {
   targetRules: TargetRule[]
   entries: DailyEntry[]
   approvals: ApprovalStep[]
+  departmentMarks: DepartmentMarks[]
+  attendance: AttendanceRecord[]
+  submittedTotals: SubmittedTotal[]
+  kpiOverrides: KpiOverride[]
   monthOverrides: MonthOverride[]
   auditLog: AuditLogEntry[]
   settings: AppSettings

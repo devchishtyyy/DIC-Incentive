@@ -10,7 +10,7 @@
  * scored, so a zero or blank target can never reach a division.
  */
 
-import { DEFAULT_SETTINGS, type AppSettings } from '../config/policy'
+import { DEFAULT_SETTINGS, PRORATA_DIVISOR, type AppSettings } from '../config/policy'
 import type { DailyEntry, DayCalendarEntry, Employee, EmployeeDayScore, IsoDate, Point } from './types'
 
 // ---------------------------------------------------------------------------
@@ -199,6 +199,144 @@ export function departmentAverage(periodScores: ReadonlyArray<number | null>): n
   const measured = periodScores.filter((score): score is number => isUsableNumber(score))
   if (measured.length === 0) return null
   return measured.reduce((sum, score) => sum + score, 0) / measured.length
+}
+
+// ---------------------------------------------------------------------------
+// The other six KPIs
+// ---------------------------------------------------------------------------
+
+/**
+ * Percentages are held and compared as **integer hundredths**: 2.83% is 283.
+ *
+ * Waste and variance are looked up in tables whose rows are a tenth of a percent apart,
+ * and 2.8 + 0.1 is 2.9000000000000004 in binary floating point. Comparing that against a
+ * 2.9 boundary is a coin toss. Integers make every boundary exact, and the tables below
+ * never see a float.
+ */
+export function toHundredths(percent: number | null | undefined): number | null {
+  if (!isUsableNumber(percent)) return null
+  return Math.round(percent * 100)
+}
+
+export function fromHundredths(hundredths: number | null | undefined): number | null {
+  if (!isUsableNumber(hundredths)) return null
+  return hundredths / 100
+}
+
+/**
+ * Rounds to the nearest table row, **ties to the worse row**.
+ *
+ * Worse means more waste or more variance, so a tie rounds up — 2.85% scores as 2.9%, not
+ * as 2.8%. The decision is recorded in the brief; it matters because a tie landing the
+ * generous way is worth 2.5 marks on the waste table.
+ */
+export function roundToTableRow(hundredths: number, stepHundredths: number): number {
+  if (!isUsableNumber(hundredths) || !isUsableNumber(stepHundredths) || stepHundredths <= 0) return hundredths
+  const lower = Math.floor(hundredths / stepHundredths) * stepHundredths
+  const remainder = hundredths - lower
+  return remainder * 2 >= stepHundredths ? lower + stepHundredths : lower
+}
+
+/** Waste table (policy 7.2). Rows a tenth of a percent apart. */
+export const WASTE_TABLE: ReadonlyArray<{ atMostHundredths: number; marks: number }> = [
+  { atMostHundredths: 280, marks: 15 },
+  { atMostHundredths: 290, marks: 12.5 },
+  { atMostHundredths: 300, marks: 10 },
+  { atMostHundredths: 310, marks: 7.5 },
+]
+export const WASTE_FLOOR_MARKS = 5
+export const WASTE_STEP_HUNDREDTHS = 10
+
+/** Waste % → marks out of 15. Null in, null out — never a silent 15 or 0. */
+export function wasteMarks(percentHundredths: number | null | undefined): number | null {
+  if (!isUsableNumber(percentHundredths)) return null
+  const rounded = roundToTableRow(percentHundredths, WASTE_STEP_HUNDREDTHS)
+  for (const row of WASTE_TABLE) {
+    if (rounded <= row.atMostHundredths) return row.marks
+  }
+  return WASTE_FLOOR_MARKS
+}
+
+/**
+ * Variance table (policy 7.1): 5.0% or better is full marks, each further half-percent
+ * costs 1.5, and 8.5% or worse is nothing. Expressed as the arithmetic rather than eight
+ * literal rows, because that is what the policy says and it cannot drift out of step.
+ */
+export const VARIANCE_BASE_HUNDREDTHS = 500
+export const VARIANCE_STEP_HUNDREDTHS = 50
+export const VARIANCE_MAX_MARKS = 10
+export const VARIANCE_PENALTY_PER_STEP = 1.5
+
+export function varianceMarks(percentHundredths: number | null | undefined): number | null {
+  if (!isUsableNumber(percentHundredths)) return null
+  const rounded = roundToTableRow(percentHundredths, VARIANCE_STEP_HUNDREDTHS)
+  if (rounded <= VARIANCE_BASE_HUNDREDTHS) return VARIANCE_MAX_MARKS
+  const steps = (rounded - VARIANCE_BASE_HUNDREDTHS) / VARIANCE_STEP_HUNDREDTHS
+  return Math.max(0, VARIANCE_MAX_MARKS - steps * VARIANCE_PENALTY_PER_STEP)
+}
+
+/**
+ * Attendance out of 10: `(26 − days absent) ÷ 26 × 10`, floored at zero.
+ *
+ * The divisor is the fixed 26 working days of an incentive period, not a count of the
+ * period's actual working days — see `periods.test.ts` for where those two part company.
+ *
+ * Null means nobody has said how many days were missed, which blocks submission. Zero days
+ * absent is a real answer worth full marks, and the two are never conflated.
+ */
+export function attendanceMarks(daysAbsent: number | null | undefined, divisor = PRORATA_DIVISOR): number | null {
+  if (!isUsableNumber(daysAbsent) || daysAbsent < 0) return null
+  if (!isUsableNumber(divisor) || divisor <= 0) return null
+  return Math.max(0, ((divisor - daysAbsent) / divisor) * 10)
+}
+
+/** The seven KPI weights, totalling 100. */
+export const KPI_WEIGHTS = {
+  production: 20,
+  waste: 15,
+  variance: 10,
+  quality: 15,
+  ehs: 15,
+  wcm5s: 15,
+  attendance: 10,
+} as const
+
+export type KpiKey = keyof typeof KPI_WEIGHTS
+
+export const KPI_ORDER: readonly KpiKey[] = ['production', 'waste', 'variance', 'quality', 'ehs', 'wcm5s', 'attendance']
+
+export const KPI_LABELS: Record<KpiKey, string> = {
+  production: 'Production',
+  waste: 'Waste',
+  variance: 'Variance',
+  quality: 'Quality',
+  ehs: 'EHS',
+  wcm5s: 'WCM & 5S',
+  attendance: 'Attendance',
+}
+
+export type KpiMarks = Record<KpiKey, number | null>
+
+/**
+ * Total out of 100: the seven KPIs added up.
+ *
+ * Null if **any** of them is missing. A total that quietly skipped a KPI would look like a
+ * poor month rather than an incomplete one, and it is the number the payment is calculated from —
+ * so a gap has to stay visible all the way to the screen.
+ */
+export function totalScore(marks: KpiMarks): number | null {
+  let total = 0
+  for (const key of KPI_ORDER) {
+    const value = marks[key]
+    if (!isUsableNumber(value)) return null
+    total += value
+  }
+  return total
+}
+
+/** Which KPIs are still missing — what the month-end checklist shows instead of a total. */
+export function missingKpis(marks: KpiMarks): KpiKey[] {
+  return KPI_ORDER.filter((key) => !isUsableNumber(marks[key]))
 }
 
 // ---------------------------------------------------------------------------

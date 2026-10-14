@@ -4,22 +4,35 @@
  */
 
 import {
+  attendanceMarks,
   calcEmployeeDay,
   calcMonthly,
+  calcMonthlyFromEntries,
+  departmentAverage,
   entryPercent,
   entryScore,
   isScorable,
+  KPI_LABELS,
+  KPI_ORDER,
+  missingKpis,
   openIssues,
+  totalScore,
   validateEntry,
+  varianceMarks,
+  wasteMarks,
+  type KpiKey,
+  type KpiMarks,
   type ValidationIssue,
 } from '../domain/calc'
 import { deadlineForPeriod, dateRange, daysBetween } from '../domain/dates'
 import type {
   AppState,
   DailyEntry,
+  Department,
   Employee,
   EmployeeMonthSummary,
   IsoDate,
+  KpiOverride,
   MonthPeriod,
   Point,
 } from '../domain/types'
@@ -461,4 +474,140 @@ export function checklistComplete(items: ChecklistItem[]): boolean {
   return items.every((item) => item.ok)
 }
 
+// ---------------------------------------------------------------------------
+// The period scorecard: all seven KPIs
+// ---------------------------------------------------------------------------
 
+export interface PeriodKpiRow {
+  employee: Employee
+  department: Department | undefined
+  /** The employee's own production score, before any department average stands in. */
+  ownProduction: number | null
+  /** True when the department average was used instead of their own output. */
+  usedDepartmentAverage: boolean
+  marks: KpiMarks
+  total: number | null
+  /** KPIs nobody has supplied yet. Empty means the row is complete. */
+  missing: KpiKey[]
+  /** Reasons this row cannot go to sign-off. Empty means it is ready. */
+  blockers: string[]
+  overrides: KpiOverride[]
+}
+
+function overrideFor(overrides: KpiOverride[], empId: number, kpi: string): KpiOverride | undefined {
+  return overrides.find((o) => o.empId === empId && o.kpi === kpi)
+}
+
+/** The marks a department's own figures give, before any per-employee override. */
+export function departmentKpiMarks(state: AppState, departmentId: string, periodId: string): Omit<KpiMarks, 'production' | 'attendance'> {
+  const marks = state.departmentMarks.find((m) => m.departmentId === departmentId && m.periodId === periodId)
+  if (!marks) return { waste: null, variance: null, quality: null, ehs: null, wcm5s: null }
+
+  return {
+    waste: wasteMarks(marks.wastePercentHundredths),
+    // Marks entered directly win over a percentage, because somebody typed them on purpose.
+    variance: marks.varianceMarksDirect ?? varianceMarks(marks.variancePercentHundredths),
+    quality: marks.quality,
+    ehs: marks.ehs,
+    wcm5s: marks.wcm5s,
+  }
+}
+
+/**
+ * Every employee's seven KPIs for a period, with the department average standing in where
+ * it should and every reason a row is not ready to sign off.
+ *
+ * This is the one place the whole incentive is assembled. The scorecard, the month-end
+ * checklist and both exports read it, so none of them can disagree about a number — which
+ * is the first invariant.
+ */
+export function periodKpis(state: AppState, periodId: string): PeriodKpiRow[] {
+  const employees = employeesInRollup(state)
+  const overrides = state.kpiOverrides.filter((o) => o.periodId === periodId)
+  const entries = selectEntries(state, { periodId })
+  const period = periodById(state, periodId)
+  const workingDayCount = period ? periodWorkingDays(state, period).length : 0
+
+  // Each employee's own production score first — the department average is built from
+  // these, so it has to exist before anybody can borrow it.
+  const ownProduction = new Map<number, number | null>()
+  for (const employee of employees) {
+    const own = entries.filter((entry) => entry.empId === employee.empId)
+    ownProduction.set(employee.empId, calcMonthlyFromEntries(own, state.settings, workingDayCount).score)
+  }
+
+  // One average per department, over its measured employees only.
+  const averageByDepartment = new Map<string, number | null>()
+  for (const department of state.departments) {
+    const scores = employees
+      .filter((employee) => employee.departmentId === department.departmentId && !employee.outputNotMeasured)
+      .map((employee) => ownProduction.get(employee.empId) ?? null)
+    averageByDepartment.set(department.departmentId, departmentAverage(scores))
+  }
+
+  return employees.map((employee) => {
+    const department = state.departments.find((d) => d.departmentId === employee.departmentId)
+    const own = ownProduction.get(employee.empId) ?? null
+    const departmentMean = averageByDepartment.get(employee.departmentId) ?? null
+
+    const usedDepartmentAverage = own === null && employee.outputNotMeasured
+    const production = usedDepartmentAverage ? departmentMean : own
+
+    const attendanceRow = state.attendance.find((a) => a.periodId === periodId && a.empId === employee.empId)
+    const departmentValues = departmentKpiMarks(state, employee.departmentId, periodId)
+
+    const base: KpiMarks = {
+      production,
+      waste: departmentValues.waste,
+      variance: departmentValues.variance,
+      quality: departmentValues.quality,
+      ehs: departmentValues.ehs,
+      wcm5s: departmentValues.wcm5s,
+      attendance: attendanceMarks(attendanceRow?.daysAbsent ?? null, state.settings.prorataDivisor),
+    }
+
+    // A per-employee override replaces the department figure for that one KPI.
+    const own_overrides = overrides.filter((o) => o.empId === employee.empId)
+    const marks: KpiMarks = { ...base }
+    for (const key of KPI_ORDER) {
+      const override = overrideFor(own_overrides, employee.empId, key)
+      if (override) marks[key] = override.value
+    }
+
+    const missing = missingKpis(marks)
+
+    const blockers: string[] = []
+    if (own === null && !employee.outputNotMeasured) {
+      blockers.push('No production rows, and not flagged as unmeasured. Enter their output, or set "Output not measured".')
+    }
+    if (usedDepartmentAverage && departmentMean === null) {
+      blockers.push('Takes the department average, but nobody in the department was measured.')
+    }
+    if (attendanceRow === undefined || attendanceRow.daysAbsent === null) {
+      blockers.push('Days absent not entered.')
+    }
+    for (const key of missing) {
+      if (key === 'production' || key === 'attendance') continue
+      blockers.push(`${KPI_LABELS[key]} marks not set for ${department?.name ?? 'their department'}.`)
+    }
+
+    return {
+      employee,
+      department,
+      ownProduction: own,
+      usedDepartmentAverage,
+      marks,
+      total: totalScore(marks),
+      missing,
+      blockers,
+      overrides: own_overrides,
+    }
+  })
+}
+
+/** Everything standing between a period and sign-off, employee by employee. */
+export function periodBlockers(state: AppState, periodId: string): Array<{ empId: number; name: string; reasons: string[] }> {
+  return periodKpis(state, periodId)
+    .filter((row) => row.blockers.length > 0)
+    .map((row) => ({ empId: row.employee.empId, name: displayName(row.employee), reasons: row.blockers }))
+}

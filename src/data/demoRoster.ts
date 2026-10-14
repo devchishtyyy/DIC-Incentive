@@ -8,6 +8,7 @@
  */
 
 import type { Employee } from '../domain/types'
+import { DEFAULT_DEPARTMENT_ID } from './masters'
 import { PLANT_POINTS, pointIdFor } from './plantMasters'
 
 type EmployeeSeed = Omit<Employee, 'incentiveListStatus' | 'active'> &
@@ -29,6 +30,8 @@ const E = (
   role,
   status: 'Active',
   pointIds: [],
+  departmentId: DEFAULT_DEPARTMENT_ID,
+  outputNotMeasured: false,
   joinDate: '2023-04-01',
   leaveDate: null,
   incentiveListStatus: 'Approved',

@@ -5,16 +5,22 @@
  */
 
 import type { AppSettings } from '../config/policy'
+import { DEFAULT_DEPARTMENT_ID } from '../data/masters'
 import { awaitingSapDetail } from '../data/plantMasters'
 import { restatePeriods } from '../domain/periods'
 import { describeSchedule, type SyncSchedule, type SyncStatus } from '../domain/syncSchedule'
 import type {
   ApprovalStep,
   AppState,
+  AttendanceRecord,
   AuditLogEntry,
+  Department,
+  DepartmentMarks,
   DirectoryEntry,
   DailyEntry,
   Employee,
+  KpiOverride,
+  SubmittedTotal,
   IsoDate,
   MonthOverride,
   MonthPeriod,
@@ -65,6 +71,15 @@ export type WriteOp =
   | { kind: 'calendar.set'; date: IsoDate; isWorkingDay: boolean; note: string }
   // Settings
   | { kind: 'settings.update'; patch: Partial<AppSettings> }
+  // Department marks, attendance, submitted totals
+  | { kind: 'deptMarks.set'; periodId: string; departmentId: string; patch: Partial<DepartmentMarks> }
+  | { kind: 'attendance.setMany'; periodId: string; rows: Array<{ empId: number; daysAbsent: number | null }> }
+  | { kind: 'submittedTotal.setMany'; periodId: string; rows: Array<{ empId: number; total: number | null }> }
+  | { kind: 'kpiOverride.set'; periodId: string; empId: number; kpi: string; value: number; reason: string }
+  | { kind: 'kpiOverride.clear'; overrideId: string }
+  | { kind: 'employee.setOutputNotMeasured'; empIds: number[]; value: boolean; reason: string }
+  | { kind: 'employee.setDepartment'; empIds: number[]; departmentId: string }
+  | { kind: 'department.upsert'; department: Department; isNew: boolean }
   // Roster sync
   | { kind: 'sync.setSchedule'; schedule: SyncSchedule }
   | { kind: 'sync.saveMapping'; mapping: unknown }
@@ -598,6 +613,8 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
         role: 'Operator',
         status: 'Active',
         pointIds: entry.pointIds,
+        departmentId: DEFAULT_DEPARTMENT_ID,
+        outputNotMeasured: false,
         joinDate: entry.joinDate,
         leaveDate: null,
         // Policy section 10 — the MD puts people on the incentive list, not the Admin.
@@ -838,6 +855,183 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
       }
 
       return { state: { ...state, settings }, logs, message: 'Settings saved.' }
+    }
+
+    // --- Department marks, attendance, submitted totals -------------------
+    case 'deptMarks.set': {
+      const existing = state.departmentMarks.find((m) => m.periodId === op.periodId && m.departmentId === op.departmentId)
+      const department = state.departments.find((d) => d.departmentId === op.departmentId)
+      const label = department?.name ?? op.departmentId
+
+      const base: DepartmentMarks = existing ?? {
+        departmentId: op.departmentId,
+        periodId: op.periodId,
+        wastePercentHundredths: null,
+        variancePercentHundredths: null,
+        varianceMarksDirect: null,
+        quality: null,
+        ehs: null,
+        wcm5s: null,
+        updatedBy: ctx.actorUserId,
+        updatedAt: ctx.now,
+      }
+
+      const next: DepartmentMarks = { ...base, ...op.patch, updatedBy: ctx.actorUserId, updatedAt: ctx.now }
+
+      const fields = ['wastePercentHundredths', 'variancePercentHundredths', 'varianceMarksDirect', 'quality', 'ehs', 'wcm5s'] as const
+      for (const field of fields) {
+        if (str(base[field]) !== str(next[field])) {
+          audit('DepartmentMarks', `${op.departmentId}|${op.periodId}`, `${label} — ${field}`, base[field], next[field], op.periodId)
+        }
+      }
+      if (logs.length === 0) return { state, logs: [], message: '' }
+
+      return {
+        state: {
+          ...state,
+          departmentMarks: [
+            ...state.departmentMarks.filter((m) => !(m.periodId === op.periodId && m.departmentId === op.departmentId)),
+            next,
+          ],
+        },
+        logs,
+        message: `${label} marks saved.`,
+      }
+    }
+
+    case 'attendance.setMany': {
+      const byEmp = new Map(state.attendance.filter((a) => a.periodId === op.periodId).map((a) => [a.empId, a]))
+      let changed = 0
+
+      for (const row of op.rows) {
+        const before = byEmp.get(row.empId)
+        if (str(before?.daysAbsent ?? null) === str(row.daysAbsent)) continue
+        changed += 1
+        audit('Attendance', `${row.empId}|${op.periodId}`, `Days absent — ${employeeLabel(row.empId)}`, before?.daysAbsent ?? '', row.daysAbsent, op.periodId)
+        byEmp.set(row.empId, { periodId: op.periodId, empId: row.empId, daysAbsent: row.daysAbsent, updatedBy: ctx.actorUserId, updatedAt: ctx.now })
+      }
+
+      if (changed === 0) return { state, logs: [], message: 'Nothing changed.' }
+
+      const kept: AttendanceRecord[] = state.attendance.filter((a) => a.periodId !== op.periodId)
+      return {
+        state: { ...state, attendance: [...kept, ...byEmp.values()] },
+        logs,
+        message: `Attendance saved for ${changed} ${changed === 1 ? 'person' : 'people'}.`,
+      }
+    }
+
+    case 'submittedTotal.setMany': {
+      const byEmp = new Map(state.submittedTotals.filter((t) => t.periodId === op.periodId).map((t) => [t.empId, t]))
+      let changed = 0
+
+      for (const row of op.rows) {
+        const before = byEmp.get(row.empId)
+        if (str(before?.total ?? null) === str(row.total)) continue
+        changed += 1
+        audit('SubmittedTotal', `${row.empId}|${op.periodId}`, `Total /100 — ${employeeLabel(row.empId)}`, before?.total ?? '', row.total, op.periodId)
+        byEmp.set(row.empId, { periodId: op.periodId, empId: row.empId, total: row.total, updatedBy: ctx.actorUserId, updatedAt: ctx.now })
+      }
+
+      if (changed === 0) return { state, logs: [], message: 'Nothing changed.' }
+
+      const kept: SubmittedTotal[] = state.submittedTotals.filter((t) => t.periodId !== op.periodId)
+      return {
+        state: { ...state, submittedTotals: [...kept, ...byEmp.values()] },
+        logs,
+        message: `Totals saved for ${changed} ${changed === 1 ? 'person' : 'people'}.`,
+      }
+    }
+
+    case 'kpiOverride.set': {
+      const previous = state.kpiOverrides.find((o) => o.periodId === op.periodId && o.empId === op.empId && o.kpi === op.kpi)
+      const override: KpiOverride = {
+        overrideId: previous?.overrideId ?? makeId('KO'),
+        periodId: op.periodId,
+        empId: op.empId,
+        kpi: op.kpi,
+        value: op.value,
+        reason: op.reason,
+        grantedBy: ctx.actorUserId,
+        grantedAt: ctx.now,
+      }
+      audit('MonthOverride', override.overrideId, `${op.kpi} override — ${employeeLabel(op.empId)}, period ${op.periodId}`, previous?.value ?? '', op.value, op.reason)
+      return {
+        state: {
+          ...state,
+          kpiOverrides: [...state.kpiOverrides.filter((o) => o.overrideId !== override.overrideId), override],
+        },
+        logs,
+        message: 'Override saved.',
+      }
+    }
+
+    case 'kpiOverride.clear': {
+      const override = state.kpiOverrides.find((o) => o.overrideId === op.overrideId)
+      if (!override) return { state, logs: [], message: '' }
+      audit('MonthOverride', op.overrideId, `${override.kpi} override removed — ${employeeLabel(override.empId)}`, override.value, '', override.reason)
+      return {
+        state: { ...state, kpiOverrides: state.kpiOverrides.filter((o) => o.overrideId !== op.overrideId) },
+        logs,
+        message: 'Override removed.',
+      }
+    }
+
+    case 'employee.setOutputNotMeasured': {
+      const picked = new Set(op.empIds)
+      const affected = state.employees.filter((e) => picked.has(e.empId) && e.outputNotMeasured !== op.value)
+      if (affected.length === 0) return { state, logs: [], message: 'Nothing changed.' }
+
+      for (const employee of affected) {
+        audit('Employee', String(employee.empId), 'Output not measured', employee.outputNotMeasured, op.value, op.reason)
+      }
+      const ids = new Set(affected.map((e) => e.empId))
+      return {
+        state: { ...state, employees: state.employees.map((e) => (ids.has(e.empId) ? { ...e, outputNotMeasured: op.value } : e)) },
+        logs,
+        message: op.value
+          ? `${affected.length} set to take the department average.`
+          : `${affected.length} back to being scored on their own output.`,
+      }
+    }
+
+    case 'employee.setDepartment': {
+      const picked = new Set(op.empIds)
+      const department = state.departments.find((d) => d.departmentId === op.departmentId)
+      if (!department) return { state, logs: [], message: '' }
+
+      const affected = state.employees.filter((e) => picked.has(e.empId) && e.departmentId !== op.departmentId)
+      if (affected.length === 0) return { state, logs: [], message: 'Nothing changed.' }
+
+      for (const employee of affected) {
+        const before = state.departments.find((d) => d.departmentId === employee.departmentId)?.name ?? employee.departmentId
+        audit('Employee', String(employee.empId), 'Department', before, department.name)
+      }
+      const ids = new Set(affected.map((e) => e.empId))
+      return {
+        state: { ...state, employees: state.employees.map((e) => (ids.has(e.empId) ? { ...e, departmentId: op.departmentId } : e)) },
+        logs,
+        message: `${affected.length} moved to ${department.name}.`,
+      }
+    }
+
+    case 'department.upsert': {
+      const previous = state.departments.find((d) => d.departmentId === op.department.departmentId)
+      if (op.isNew || !previous) {
+        audit('Department', op.department.departmentId, 'Department created', '', `${op.department.name} · ${op.department.rateGroup} · ${op.department.scoringMode}`)
+        return { state: { ...state, departments: [...state.departments, op.department] }, logs, message: `${op.department.name} added.` }
+      }
+      for (const field of ['name', 'rateGroup', 'scoringMode', 'active'] as const) {
+        if (str(previous[field]) !== str(op.department[field])) {
+          audit('Department', op.department.departmentId, field, previous[field], op.department[field])
+        }
+      }
+      if (logs.length === 0) return { state, logs: [], message: '' }
+      return {
+        state: { ...state, departments: state.departments.map((d) => (d.departmentId === op.department.departmentId ? op.department : d)) },
+        logs,
+        message: `${op.department.name} updated.`,
+      }
     }
 
     // --- Roster sync ------------------------------------------------------

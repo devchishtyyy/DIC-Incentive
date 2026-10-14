@@ -26,13 +26,13 @@ import type {
   TargetRule,
 } from '../domain/types'
 import { periodsEndingAt } from '../domain/periods'
-import { POINT_ALIASES, POINTS, USERS } from './masters'
+import { DEFAULT_DEPARTMENT_ID, DEPARTMENTS, POINT_ALIASES, POINTS, USERS } from './masters'
 import { assignedPointIds, PLANT_ROSTER, SAP_EMP_ID_OFFSET } from './plantMasters'
 import { DEMO_EMPLOYEES } from './demoRoster'
 import { createRng } from './rng'
 import { INITIAL_SYNC_STATE } from '../domain/syncSchedule'
 
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 const SEED = 20260817
 
 /** The four demo periods — one in each workflow state (seeded scenario 10). */
@@ -577,6 +577,7 @@ export function buildBaseState(): AppState {
     schemaVersion: SCHEMA_VERSION,
     users: USERS.map((user) => ({ ...user })),
     points: POINTS.map((point) => ({ ...point })),
+    departments: DEPARTMENTS.map((department) => ({ ...department })),
     directory: roster,
     employees: roster.map((entry) => ({
       empId: entry.empId,
@@ -588,6 +589,8 @@ export function buildBaseState(): AppState {
       role: 'Operator' as const,
       status: 'Active' as const,
       pointIds: entry.pointIds,
+      departmentId: DEFAULT_DEPARTMENT_ID,
+      outputNotMeasured: false,
       joinDate: entry.joinDate,
       leaveDate: null,
       incentiveListStatus: 'Pending MD approval' as const,
@@ -598,6 +601,10 @@ export function buildBaseState(): AppState {
     targetRules: buildTargetRules(),
     entries: [],
     approvals: [],
+    departmentMarks: [],
+    attendance: [],
+    submittedTotals: [],
+    kpiOverrides: [],
     monthOverrides: [],
     auditLog: [],
     settings: { ...DEFAULT_SETTINGS },

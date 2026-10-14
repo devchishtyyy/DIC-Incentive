@@ -66,6 +66,8 @@ export type Action =
   | 'masterdata.manage'
   | 'employee.approveAdd'
   | 'employee.setName'
+  | 'periodMarks.edit'
+  | 'periodMarks.view'
   | 'audit.view'
   | 'settings.view'
   | 'settings.edit'
@@ -239,6 +241,23 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
       return ALLOW
     }
 
+    /*
+     * The six KPIs that are not production: department marks, attendance, submitted totals.
+     *
+     * The Office Executive enters them, exactly as they enter daily output — the brief is
+     * explicit about that. The HOD can too, since they already correct entries and sign the
+     * month off. The Admin is deliberately out: they maintain master data, not marks.
+     */
+    case 'periodMarks.edit': {
+      if (grantFor(role, 'entry.edit') !== 'E') return deny(`${ROLE_SHORT[role]} does not enter period marks.`)
+      if (resource.periodStatus === 'Locked') return deny('The period is Locked. Reopen it before changing any marks.')
+      if (resource.periodStatus === 'HOD Signed') return deny('The period is signed off and waiting for Operations Manager approval.')
+      return ALLOW
+    }
+
+    case 'periodMarks.view':
+      return grantFor(role, 'entry.view') === 'none' ? deny(`${ROLE_SHORT[role]} has no access to period marks.`) : ALLOW
+
     case 'employee.approveAdd':
       return grantFor(role, 'employee.approveAdd') !== 'A'
         ? deny('Adding an employee to the incentive list needs MD approval (policy section 10).')
@@ -275,6 +294,8 @@ export function canSeeScreen(role: RoleId, screen: string): boolean {
       return can(role, 'audit.view').allowed
     // People covers the SAP directory and the incentive list: the Admin proposes, the MD
     // approves, so both need the screen even though they see different tabs of it.
+    case 'period-marks':
+      return can(role, 'periodMarks.view').allowed
     case 'people':
       return can(role, 'masterdata.manage').allowed || can(role, 'employee.approveAdd').allowed
     default:

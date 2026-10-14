@@ -13,6 +13,7 @@
  * before anything is written.
  */
 
+import { DEFAULT_DEPARTMENT_ID } from './masters'
 import type { Employee, EmployeeStatus, IsoDate, Site } from '../domain/types'
 import { assignedPointIds, floorEmpIdFrom } from './plantMasters'
 
@@ -303,6 +304,8 @@ export function mapSapUsers(users: SapUser[], mapping: FieldMapping): ImportResu
         // SuccessFactors has no probation flag on User.
         status: 'Active' as EmployeeStatus,
         pointIds: match.points,
+        departmentId: DEFAULT_DEPARTMENT_ID,
+        outputNotMeasured: false,
         joinDate: joinDate ?? '',
         leaveDate: null,
         // Policy section 10: joining the incentive list needs MD approval, import included.

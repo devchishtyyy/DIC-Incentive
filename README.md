@@ -49,7 +49,7 @@ working days.** They agree in most months and part company across February, wher
 either way — that is the policy's rule, and `periods.test.ts` pins the difference so it
 cannot be "fixed" into something that changes people's pay.
 
-### The eight screens
+### The nine screens
 
 Navigation is grouped by when you use it, not by what the data is called.
 
@@ -57,6 +57,7 @@ Navigation is grouped by when you use it, not by what the data is called.
 |---|---|---|
 | Every day | **Daily Entry** — target and output per employee and point, live %age and Score, inline target editing, bulk add and delete, paste Emp IDs from Excel | Office Exec, HOD |
 | Every day | **Scorecard** — the Excel grid: employees down, dates across, Total Avg Score | all |
+| Month end | **Period marks** — the six KPIs that are not production: one set per department (waste, variance, quality, EHS, WCM & 5S), days absent per person, and submitted totals | Office Exec, HOD |
 | Month end | **Review & sign-off** — checklist, two sign-offs, both return loops, step history | Office Exec, HOD, Ops |
 | Month end | **Export** — approved periods only, CSV and XLSX in Employee KPI sheet column order | Finance, Ops |
 | Setup | **Targets** — type default targets down the column; the HOD's dated changes with reason and history | HOD and Admin edit, others view |
@@ -332,6 +333,15 @@ change, the pending MD approval — are reachable from the **Demo Guide** screen
   `User` entity really returns: the `{d:{results}}` envelope, `/Date(…)/` timestamps,
   partial records, duplicate Emp IDs, and every unresolved lookup surfaced rather than
   guessed.
+- `domain/kpiTables.test.ts` — the waste and variance tables: every row, both sides of
+  every rounding tie (ties go to the *worse* row, worth 2.5 marks on waste), monotonicity
+  across the whole range, attendance at 0, 2 and 26+ days absent, and the brief's worked
+  total of 97.426224.
+- `store/periodKpis.test.ts` — assembling one employee's seven KPIs: department marks
+  reaching everyone, a per-employee override replacing one of them, and the case that
+  matters most — somebody with no production rows and no flag **blocks** sign-off rather
+  than quietly taking the department average, so a month of forgotten entries cannot pay
+  out as a normal one.
 - `domain/periods.test.ts` — the 16th-to-15th period: bounds across month ends, February
   and a leap February, the new year, every day of a year landing in exactly one period,
   no gap or overlap at any start day, restating periods when the setting moves, and the

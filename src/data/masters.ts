@@ -6,7 +6,7 @@
  * below stay invented — SAP users are not mapped onto app roles.
  */
 
-import type { Employee, Point, User } from '../domain/types'
+import type { Department, Employee, Point, User } from '../domain/types'
 import { PLANT_POINTS, pointIdFor } from './plantMasters'
 
 export const USERS: User[] = [
@@ -95,3 +95,32 @@ export function bandForGrade(grade: string): number {
 
 /** Employees who appear on the Daily Entry screen — Operators and Supervisors only. */
 export const ENTRY_ELIGIBLE_ROLES: Employee['role'][] = ['Operator', 'Supervisor']
+
+// ---------------------------------------------------------------------------
+// Departments
+// ---------------------------------------------------------------------------
+
+/**
+ * The departments on the incentive list.
+ *
+ * Production is the one the app was built for and the only one that computes a score from
+ * the seven KPIs. Maintenance and Support Production submit one total out of 100 per
+ * employee instead — the brief is explicit that they do not use the KPI breakdown.
+ *
+ * `rateGroup` picks a column out of the 2025/2026 rate sheet. The sheet names "Production &
+ * Maintenance" as the Production group, so Maintenance sits there despite submitting a
+ * total. Support Production is not named on the sheet at all; it is seeded as Production
+ * because it works the floor, and that reading is on the Settings open-questions list.
+ */
+export const DEPARTMENTS: Department[] = [
+  { departmentId: 'DEP-PROD', name: 'Production', rateGroup: 'Production', scoringMode: 'computed', active: true },
+  { departmentId: 'DEP-MAINT', name: 'Maintenance', rateGroup: 'Production', scoringMode: 'submittedTotal', active: true },
+  { departmentId: 'DEP-SUPPROD', name: 'Support Production', rateGroup: 'Production', scoringMode: 'submittedTotal', active: true },
+  { departmentId: 'DEP-TECH', name: 'Technical', rateGroup: 'Support', scoringMode: 'submittedTotal', active: true },
+  { departmentId: 'DEP-STORES', name: 'Stores', rateGroup: 'Support', scoringMode: 'submittedTotal', active: true },
+  { departmentId: 'DEP-DISPATCH', name: 'Dispatch', rateGroup: 'Support', scoringMode: 'submittedTotal', active: true },
+  { departmentId: 'DEP-SAP', name: 'SAP', rateGroup: 'Support', scoringMode: 'submittedTotal', active: true },
+]
+
+/** Everyone DIC supplied works Production. */
+export const DEFAULT_DEPARTMENT_ID = 'DEP-PROD'

@@ -13,6 +13,7 @@ import MonthEndReview from './screens/MonthEndReview'
 import ExportScreen from './screens/ExportScreen'
 import AuditLog from './screens/AuditLog'
 import People from './screens/People'
+import PeriodMarks from './screens/PeriodMarks'
 import Settings from './screens/Settings'
 import DemoGuide from './screens/DemoGuide'
 import Login from './screens/Login'
@@ -47,6 +48,7 @@ function Gate() {
         <Route path="targets" element={<Targets />} />
         <Route path="scorecard" element={<MonthlyScorecard />} />
         <Route path="employees/:empId" element={<EmployeeDetail />} />
+        <Route path="period-marks" element={<Screen name="period-marks"><PeriodMarks /></Screen>} />
         <Route path="month-end" element={<MonthEndReview />} />
         <Route path="export" element={<Screen name="export"><ExportScreen /></Screen>} />
         <Route path="audit" element={<Screen name="audit"><AuditLog /></Screen>} />
