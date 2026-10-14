@@ -5,7 +5,7 @@
  * Production Area; the Office Executive and the EHS Representative have no access at all.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge, EmptyState, Icon, PageHeader } from '../components/ui'
 import { formatDateTime } from '../domain/dates'
 import { downloadCsv } from '../domain/exporters'
@@ -30,25 +30,52 @@ const ENTITIES: Array<AuditEntity | 'All'> = [
 const PAGE_SIZE = 50
 
 export default function AuditLog() {
-  const { state } = useApp()
+  const { state, period } = useApp()
   const [query, setQuery] = useState('')
   const [entity, setEntity] = useState<AuditEntity | 'All'>('All')
   const [actor, setActor] = useState('All')
+  /**
+   * The log opens on the month you are looking at, not on everything ever.
+   *
+   * A question about the audit trail is nearly always a question about one month-end —
+   * "why is this person's September different" — and the whole log across every period
+   * buries that under hundreds of rows from months nobody is asking about.
+   */
+  const [periodId, setPeriodId] = useState<string>(period.periodId)
   const [limit, setLimit] = useState(PAGE_SIZE)
+
+  // Following the period picker in the top bar is what somebody expects; they changed the
+  // month precisely because that is the month they now care about.
+  useEffect(() => setPeriodId(period.periodId), [period.periodId])
 
   const scoped = state.auditLog
 
   const actors = useMemo(() => [...new Set(scoped.map((row) => row.userId))], [scoped])
 
+  /** Every period that has a log row, newest first, plus the ones the app holds. */
+  const periodOptions = useMemo(() => {
+    const ids = new Set(scoped.map((row) => row.periodId).filter(Boolean))
+    for (const candidate of state.periods) ids.add(candidate.periodId)
+    return [...ids].sort((a, b) => b.localeCompare(a))
+  }, [scoped, state.periods])
+
+  const labelFor = (id: string) => state.periods.find((candidate) => candidate.periodId === id)?.label ?? id
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return scoped.filter((row) => {
+      if (periodId !== 'All' && row.periodId !== periodId) return false
       if (entity !== 'All' && row.entity !== entity) return false
       if (actor !== 'All' && row.userId !== actor) return false
       if (!needle) return true
       return [row.field, row.oldValue, row.newValue, row.reason, row.entityId].some((value) => value.toLowerCase().includes(needle))
     })
-  }, [scoped, entity, actor, query])
+  }, [scoped, periodId, entity, actor, query])
+
+  const countForPeriod = useMemo(
+    () => (periodId === 'All' ? scoped.length : scoped.filter((row) => row.periodId === periodId).length),
+    [scoped, periodId],
+  )
 
   const nameOf = (userId: string) => {
     const found = state.users.find((u) => u.userId === userId)
@@ -61,7 +88,10 @@ export default function AuditLog() {
         title="Audit Log"
         subtitle={
           <span>
-            Every create, edit, target change, override, approval and reopen. {filtered.length} of {scoped.length} rows shown.
+            Every create, edit, target change, override, approval and reopen.{' '}
+            {periodId === 'All'
+              ? `${filtered.length} of ${scoped.length} rows across every month.`
+              : `${filtered.length} of ${countForPeriod} rows in ${labelFor(periodId)}.`}
           </span>
         }
         actions={
@@ -100,6 +130,20 @@ export default function AuditLog() {
           </div>
 
           <div>
+            <label className="label" htmlFor="audit-period">
+              Month
+            </label>
+            <select id="audit-period" className="input mt-1 w-auto" value={periodId} onChange={(event) => setPeriodId(event.target.value)}>
+              <option value="All">All months</option>
+              {periodOptions.map((option) => (
+                <option key={option} value={option}>
+                  {labelFor(option)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="label" htmlFor="audit-entity">
               Entity
             </label>
@@ -126,7 +170,7 @@ export default function AuditLog() {
             </select>
           </div>
 
-          {(query || entity !== 'All' || actor !== 'All') && (
+          {(query || entity !== 'All' || actor !== 'All' || periodId !== 'All') && (
             <button
               type="button"
               className="btn btn-ghost"
@@ -134,6 +178,7 @@ export default function AuditLog() {
                 setQuery('')
                 setEntity('All')
                 setActor('All')
+                setPeriodId('All')
               }}
             >
               Clear filters

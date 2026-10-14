@@ -7,7 +7,7 @@
 import type { AppSettings } from '../config/policy'
 import { DEFAULT_DEPARTMENT_ID } from '../data/masters'
 import { awaitingSapDetail } from '../data/plantMasters'
-import { restatePeriods } from '../domain/periods'
+import { missingPeriods, periodContaining, periodIdFor, restatePeriods } from '../domain/periods'
 import { currentRateTable, snapshotRowsFor } from './selectors'
 import type { GradeBand, RateTable } from '../domain/rates'
 import { describeSchedule, type SyncSchedule, type SyncStatus } from '../domain/syncSchedule'
@@ -74,6 +74,7 @@ export type WriteOp =
   | { kind: 'calendar.set'; date: IsoDate; isWorkingDay: boolean; note: string }
   // Settings
   | { kind: 'settings.update'; patch: Partial<AppSettings> }
+  | { kind: 'period.ensure'; today: IsoDate }
   // Department marks, attendance, submitted totals
   | { kind: 'deptMarks.set'; periodId: string; departmentId: string; patch: Partial<DepartmentMarks> }
   | { kind: 'attendance.setMany'; periodId: string; rows: Array<{ empId: number; daysAbsent: number | null }> }
@@ -171,6 +172,21 @@ function touch(entry: DailyEntry, ctx: WriteContext): DailyEntry {
 export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): WriteResult {
   const logs: AuditLogEntry[] = []
   let logSeq = 0
+
+  /*
+   * Which month this change belongs to.
+   *
+   * Taken from the op where it says so, because that is the month the change is *about* —
+   * a September row corrected in October belongs to September. Only when the op names no
+   * period does this fall back to the month the clock is in, which is the right answer for
+   * things like a target change or a new employee.
+   */
+  const opPeriodId = (op as { periodId?: string }).periodId
+  const fallbackPeriodId =
+    periodContaining(state.periods, ctx.now.slice(0, 10))?.periodId ??
+    periodIdFor(ctx.now.slice(0, 10), state.settings.periodStartDay)
+  const logPeriodId = typeof opPeriodId === 'string' && opPeriodId ? opPeriodId : fallbackPeriodId
+
   const audit = (
     entity: AuditLogEntry['entity'],
     entityId: string,
@@ -178,12 +194,14 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
     oldValue: unknown,
     newValue: unknown,
     reason = '',
+    periodId = logPeriodId,
   ) => {
     logSeq += 1
     logs.push({
       logId: `${makeId('LOG')}${logSeq}`,
       timestamp: ctx.now,
       userId: ctx.actorUserId,
+      periodId,
       entity,
       entityId,
       field,
@@ -1135,6 +1153,35 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
         state: { ...state, departments: state.departments.map((d) => (d.departmentId === op.department.departmentId ? op.department : d)) },
         logs,
         message: `${op.department.name} updated.`,
+      }
+    }
+
+    case 'period.ensure': {
+      /*
+       * The incentive period rolls over on its own: on the 16th a new one begins whether
+       * or not anybody opened the app that morning. So instead of a maintained list, this
+       * fills whatever is missing between the newest period on file and today — including
+       * the gaps left by a fortnight nobody logged in.
+       *
+       * Existing periods are never touched. A Locked month stays locked.
+       */
+      const created = missingPeriods(state.periods, op.today, state.settings.periodStartDay)
+      if (created.length === 0) return { state, logs: [], message: '' }
+
+      for (const period of created) {
+        audit('MonthPeriod', period.periodId, 'Period opened', '', `${period.label} · ${period.startDate} to ${period.endDate}`, 'Opened automatically as the calendar reached it', period.periodId)
+      }
+
+      return {
+        state: {
+          ...state,
+          periods: [...state.periods, ...created].sort((a, b) => a.periodId.localeCompare(b.periodId)),
+        },
+        logs,
+        message:
+          created.length === 1
+            ? `${created[0].label} is now open.`
+            : `${created.length} periods opened, up to ${created[created.length - 1].label}.`,
       }
     }
 

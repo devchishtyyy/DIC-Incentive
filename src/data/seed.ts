@@ -25,7 +25,7 @@ import type {
   PeriodStatus,
   TargetRule,
 } from '../domain/types'
-import { periodsEndingAt } from '../domain/periods'
+import { periodIdFor, periodsEndingAt } from '../domain/periods'
 import { DEFAULT_GRADE_ALIASES, RATE_TABLE_2025 } from '../domain/rates'
 import { DEFAULT_DEPARTMENT_ID, DEPARTMENTS, POINT_ALIASES, POINTS, USERS } from './masters'
 import { assignedPointIds, PLANT_ROSTER, SAP_EMP_ID_OFFSET } from './plantMasters'
@@ -33,7 +33,7 @@ import { DEMO_EMPLOYEES } from './demoRoster'
 import { createRng } from './rng'
 import { INITIAL_SYNC_STATE } from '../domain/syncSchedule'
 
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 const SEED = 20260817
 
 /** The four demo periods — one in each workflow state (seeded scenario 10). */
@@ -43,6 +43,12 @@ const SEED = 20260817
  *
  * The Aug period used to start on the 17th, which was open question 4 showing up as data.
  * The period rule is now settled at the 16th and these are generated from it.
+ *
+ * Anchored to a fixed period rather than to the clock, deliberately: this is fixture data,
+ * and a seed that moved with the calendar would make the tests mean something different
+ * every day they ran. Forward motion is the runtime's job — `period.ensure` opens whatever
+ * months the calendar has reached, so the app always holds the current one however long
+ * after this it is first opened.
  */
 const PERIOD_STATUSES: PeriodStatus[] = ['Locked', 'HOD Signed', 'Submitted', 'Open']
 
@@ -440,9 +446,15 @@ function buildAuditLog(
   const rng = createRng(SEED + 7)
   const log: AuditLogEntry[] = []
   let sequence = 0
-  const add = (partial: Omit<AuditLogEntry, 'logId'>) => {
+  // Every demo log row belongs to a month, as a real one does; the period is worked out
+  // from the date the change concerns, falling back to when it was made.
+  const add = (partial: Omit<AuditLogEntry, 'logId' | 'periodId'> & { periodId?: string }) => {
     sequence += 1
-    log.push({ logId: `LOG-${String(sequence).padStart(5, '0')}`, ...partial })
+    log.push({
+      logId: `LOG-${String(sequence).padStart(5, '0')}`,
+      periodId: partial.periodId ?? periodIdFor(partial.timestamp.slice(0, 10), DEFAULT_SETTINGS.periodStartDay),
+      ...partial,
+    })
   }
 
   // Every target change the HOD made.
@@ -471,6 +483,7 @@ function buildAuditLog(
       oldValue: '',
       newValue: step.decision,
       reason: step.comment,
+      periodId: step.periodId,
     })
   }
 
@@ -485,6 +498,7 @@ function buildAuditLog(
       oldValue: '',
       newValue: String(override.score),
       reason: override.reason,
+      periodId: override.periodId,
     })
   }
 
@@ -499,6 +513,7 @@ function buildAuditLog(
       oldValue: '',
       newValue: String(dayOverride.scoreOverride),
       reason: dayOverride.overrideReason ?? '',
+      periodId: dayOverride.periodId,
     })
   }
 

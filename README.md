@@ -93,6 +93,16 @@ keeping their ids and statuses. DIC used the 17th at least once, which is why it
 setting; 1 turns a period into a calendar month. Days above 28 are refused, because
 February cannot honour them.
 
+**Periods open themselves.** On the 16th a new one begins whether or not anybody opened
+the app that morning, so the app does not keep a maintained list — it works out which
+periods should exist and fills the gaps on load, and again whenever the date changes
+under a session left open. A fortnight nobody logged in catches up in one go. Existing
+periods are never touched, so a Locked month stays locked, and **each month opened is
+written to the audit log** as it happens.
+
+The app opens on the period today falls in, not on a default fixed when the code was
+written.
+
 One consequence worth knowing: **26 is a fixed divisor, not a count of the period's
 working days.** They agree in most months and part company across February, where
 16 Feb – 15 Mar is 28 days and yields 24 Mon–Sat days. Attendance divides by the fixed 26
@@ -112,7 +122,7 @@ Navigation is grouped by when you use it, not by what the data is called.
 | Month end | **Export** — the Employee KPI sheet and the Score Card, CSV and XLSX, with a live preview | Finance, Ops |
 | Setup | **Targets** — type default targets down the column; the HOD's dated changes with reason and history | HOD and Admin edit, others view |
 | Setup | **People** — SAP directory, incentive list with bulk MD approval, departments, points, users, day calendar | Admin, MD |
-| Setup | **Audit log** — who, when, what changed, old value, new value, reason | HOD, Ops, Finance, MD, Admin |
+| Setup | **Audit log** — who, when, what changed, old value, new value, reason, filtered by month | HOD, Ops, Finance, MD, Admin |
 | Setup | **Settings** — policy constants, open policy questions, permission matrix | Admin edits, all view |
 
 Opening an employee from the scorecard gives **Employee Detail** — trend chart, every
@@ -383,6 +393,11 @@ change, the pending MD approval — are reachable from the **Demo Guide** screen
   `User` entity really returns: the `{d:{results}}` envelope, `/Date(…)/` timestamps,
   partial records, duplicate Emp IDs, and every unresolved lookup surfaced rather than
   guessed.
+- `store/periodRoll.test.ts` — the calendar rolling forward: the next period appearing on
+  the 16th and not on the 15th, catching up a gap nobody was there for, never touching a
+  period that already exists (a Locked month stays locked), and every change carrying the
+  month it is *about* rather than the month it was made in — a September row corrected in
+  October belongs to September's month-end.
 - `domain/exportRows.test.ts` — the two sheets Finance receives: the Employee KPI column
   order from the workbook, the grand total summing the rounded Earned column so the sheet
   adds up to itself, and the rule that a missing figure exports **blank, never 0** — a zero

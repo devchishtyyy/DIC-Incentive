@@ -7,7 +7,6 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { DEMO_TODAY } from '../config/policy'
 import { can, type Action, type Resource } from '../domain/permissions'
 import type { AppState, MonthPeriod, User } from '../domain/types'
 import { buildBaseState, buildDemoState, DEFAULT_PERIOD_ID, generateEntriesForRoster, SCHEMA_VERSION } from '../data/seed'
@@ -94,7 +93,7 @@ function loadState(): { state: AppState; warning: string | null } {
 }
 
 function loadSession(seed: AppState): Session {
-  const fallback: Session = { userId: null, periodId: DEFAULT_PERIOD_ID }
+  const fallback: Session = { userId: null, periodId: livePeriodId(seed) }
   try {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) return fallback
@@ -144,6 +143,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [state.users, session.userId],
   )
 
+  /**
+   * Today, from the clock.
+   *
+   * Re-read on a timer rather than captured once, so an app left open over midnight on the
+   * 15th does not spend the next period still believing it is the previous one — which is
+   * exactly the machine this runs on, left open on the entry screen all week.
+   */
+  const [today, setToday] = useState(localToday)
+  useEffect(() => {
+    const tick = () => setToday(localToday())
+    const timer = window.setInterval(tick, CLOCK_CHECK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
+
   const period = useMemo(
     () => state.periods.find((p) => p.periodId === session.periodId) ?? state.periods[state.periods.length - 1],
     [state.periods, session.periodId],
@@ -176,14 +189,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const resetToEmpty = useCallback(() => {
-    setState(buildBaseState())
-    setSession({ userId: session.userId, periodId: DEFAULT_PERIOD_ID })
+    const fresh = buildBaseState()
+    setState(fresh)
+    setSession({ userId: session.userId, periodId: livePeriodId(fresh) })
     pushToast('info', 'Reset to master data only — no employees and no entries.')
   }, [session.userId, pushToast])
 
   const loadDemoData = useCallback(() => {
-    setState(buildDemoState())
-    setSession({ userId: session.userId, periodId: DEFAULT_PERIOD_ID })
+    const demo = buildDemoState()
+    setState(demo)
+    setSession({ userId: session.userId, periodId: livePeriodId(demo) })
     pushToast('info', 'Demo data loaded — 35 invented employees and their production history.')
   }, [session.userId, pushToast])
 
@@ -203,6 +218,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [user, period.status],
   )
 
+  /*
+   * Open whatever periods the calendar has reached.
+   *
+   * On load and whenever the date changes under us. The write is a no-op when there is
+   * nothing missing, so this is cheap to run often and it means nobody has to remember to
+   * create next month — the 16th does it.
+   */
+  useEffect(() => {
+    write({ kind: 'period.ensure', today })
+  }, [today, write])
+
   // Runs on load and every few minutes while the app is open. Declared after `write` and
   // `pushToast` because it uses both.
   const rosterSync = useRosterSync(state, write, pushToast)
@@ -213,9 +239,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signedIn,
       user,
       period,
-      today: DEMO_TODAY,
+      today,
       storageWarning,
-      signIn: (userId) => setSession((s) => ({ ...s, userId, periodId: DEFAULT_PERIOD_ID })),
+      signIn: (userId) => setSession((s) => ({ ...s, userId, periodId: livePeriodId(state) })),
       signOut: () => setSession((s) => ({ ...s, userId: null })),
       setPeriodId: (periodId) => setSession((s) => ({ ...s, periodId })),
       write,
@@ -232,6 +258,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+}
+
+/** Midnight-safe local date, as YYYY-MM-DD. `toISOString` would shift it by the timezone. */
+function localToday(): string {
+  const now = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** How often to re-read the clock. Often enough to cross midnight without a reload. */
+const CLOCK_CHECK_MS = 60 * 1000
+
+/**
+ * The period the app should open on: the one today falls in, or the newest it holds.
+ *
+ * Deliberately not a constant. A fixed default would send everybody to a month that was
+ * current when the code was written, which is wrong the moment the calendar moves on.
+ */
+function livePeriodId(state: AppState): string {
+  const date = localToday()
+  const live = state.periods.find((period) => date >= period.startDate && date <= period.endDate)
+  if (live) return live.periodId
+  const newest = [...state.periods].sort((a, b) => a.periodId.localeCompare(b.periodId)).pop()
+  return newest?.periodId ?? DEFAULT_PERIOD_ID
 }
 
 export function useApp(): AppContextValue {

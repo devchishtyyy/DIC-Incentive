@@ -121,3 +121,55 @@ export function periodsEndingAt(lastPeriodId: string, count: number, startDay: n
 export function restatePeriods(periods: readonly MonthPeriod[], startDay: number): MonthPeriod[] {
   return periods.map((period) => buildPeriod(period.periodId, startDay, period.status) ?? period)
 }
+
+// ---------------------------------------------------------------------------
+// Rolling forward
+// ---------------------------------------------------------------------------
+
+/** How much history to create when the app opens on an empty calendar. */
+export const DEFAULT_HISTORY_PERIODS = 4
+
+/**
+ * The periods that ought to exist today but do not.
+ *
+ * The incentive period is a rolling thing: on the 16th a new one begins whether or not
+ * anybody opened the app that morning. So rather than a maintained list, the app works out
+ * what should exist and fills the gaps — including the gaps left by a fortnight's holiday,
+ * which is why this returns *every* missing period and not just the current one.
+ *
+ * Returned oldest first, with existing periods left strictly alone: a period that is
+ * already Locked or Submitted is never touched by rolling forward.
+ */
+export function missingPeriods(
+  existing: readonly MonthPeriod[],
+  today: IsoDate,
+  startDay: number,
+  historyCount = DEFAULT_HISTORY_PERIODS,
+): MonthPeriod[] {
+  const current = periodIdFor(today, startDay)
+  const have = new Set(existing.map((period) => period.periodId))
+
+  // From the newest period on file, forward to the current one. With nothing on file at
+  // all, start far enough back that the app opens with some history behind it.
+  const newest = existing.reduce<string | null>(
+    (latest, period) => (latest === null || period.periodId > latest ? period.periodId : latest),
+    null,
+  )
+  const from = newest ?? shiftPeriodId(current, -(historyCount - 1))
+
+  const out: MonthPeriod[] = []
+  for (let cursor = from; cursor <= current; cursor = shiftPeriodId(cursor, 1)) {
+    if (!have.has(cursor)) {
+      const period = buildPeriod(cursor, startDay)
+      if (period) out.push(period)
+    }
+    // A malformed id would otherwise spin forever.
+    if (parsePeriodId(cursor) === null) break
+  }
+  return out
+}
+
+/** The period a date belongs to, from the list the app holds. */
+export function periodContaining(periods: readonly MonthPeriod[], date: IsoDate): MonthPeriod | null {
+  return periods.find((period) => date >= period.startDate && date <= period.endDate) ?? null
+}

@@ -357,6 +357,15 @@ export interface AuditLogEntry {
   logId: string
   timestamp: IsoDateTime
   userId: string
+  /**
+   * The incentive period this change belongs to.
+   *
+   * Not the same as the month the timestamp falls in: a correction made on 25 October to a
+   * row dated 20 September belongs to September's month-end, and that is the month somebody
+   * auditing it will be looking at. Empty only for changes that belong to no period, such
+   * as editing master data.
+   */
+  periodId: string
   entity: AuditEntity
   entityId: string
   field: string
