@@ -1,0 +1,208 @@
+@import 'tailwindcss';
+
+/*
+  Design tokens. The font stack is Urdu-ready: Noto Nastaliq Urdu and Jameel Noori
+  Nastaleeq come before the Latin faces for Arabic-script text, and no layout in the app
+  uses a fixed text width, so a bilingual or RTL build stays possible.
+*/
+@theme {
+  --font-sans:
+    'Segoe UI', 'Noto Sans', ui-sans-serif, system-ui, 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq',
+    'Noto Naskh Arabic', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Consolas', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-ink-50: #f7f8fa;
+  --color-ink-100: #eef0f4;
+  --color-ink-200: #dfe3ea;
+  --color-ink-300: #c6ccd8;
+  --color-ink-400: #98a1b2;
+  --color-ink-500: #6b7486;
+  --color-ink-600: #4d5668;
+  --color-ink-700: #374152;
+  --color-ink-800: #232b38;
+  --color-ink-900: #141a24;
+
+  --color-brand-50: #eef3fc;
+  --color-brand-100: #d9e4f9;
+  --color-brand-200: #b4c9f2;
+  --color-brand-400: #5b86da;
+  --color-brand-600: #2a56b5;
+  --color-brand-700: #1f4292;
+  --color-brand-800: #18336f;
+
+  --color-good-50: #eaf7ee;
+  --color-good-100: #cfeeda;
+  --color-good-600: #167a3c;
+  --color-good-700: #11602f;
+
+  --color-warn-50: #fdf4e3;
+  --color-warn-100: #fae7c2;
+  --color-warn-600: #a35c06;
+  --color-warn-700: #7f4705;
+
+  --color-bad-50: #fdedec;
+  --color-bad-100: #fbd9d6;
+  --color-bad-600: #b32218;
+  --color-bad-700: #8e1a12;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-ink-100 text-ink-900 font-sans antialiased;
+    margin: 0;
+  }
+
+  /* Visible focus everywhere — required for the keyboard path through Daily Entry. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 1px;
+    border-radius: 2px;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-lg border border-ink-200 bg-white shadow-xs;
+  }
+
+  .card-pad {
+    @apply p-4 sm:p-5;
+  }
+
+  .label {
+    @apply block text-xs font-semibold tracking-wide text-ink-600 uppercase;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-ink-300 bg-white px-2.5 py-1.5 text-sm text-ink-900
+      placeholder:text-ink-400 disabled:cursor-not-allowed disabled:bg-ink-50 disabled:text-ink-500;
+  }
+
+  .input-error {
+    @apply border-bad-600 bg-bad-50;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium
+      transition-colors disabled:cursor-not-allowed disabled:opacity-55;
+  }
+
+  .btn-primary {
+    @apply border-brand-700 bg-brand-600 text-white hover:not-disabled:bg-brand-700;
+  }
+
+  .btn-default {
+    @apply border-ink-300 bg-white text-ink-800 hover:not-disabled:bg-ink-50;
+  }
+
+  .btn-good {
+    @apply border-good-700 bg-good-600 text-white hover:not-disabled:bg-good-700;
+  }
+
+  .btn-bad {
+    @apply border-bad-700 bg-bad-600 text-white hover:not-disabled:bg-bad-700;
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-ink-600 hover:not-disabled:bg-ink-100 hover:not-disabled:text-ink-900;
+  }
+
+  .btn-sm {
+    @apply px-2 py-1 text-xs;
+  }
+
+  .th {
+    @apply border-b border-ink-200 bg-ink-50 px-3 py-2 text-left text-xs font-semibold tracking-wide
+      text-ink-600 uppercase;
+  }
+
+  .td {
+    @apply border-b border-ink-100 px-3 py-2 align-middle text-sm;
+  }
+
+  .num {
+    @apply text-right font-mono tabular-nums;
+  }
+
+  .link {
+    @apply text-brand-600 underline underline-offset-2 hover:text-brand-800;
+  }
+
+  /*
+   * Sidebar destinations. A rounded pill, an icon that takes the accent when active, and a
+   * rail on the left that grows in rather than appearing — so the eye follows the move
+   * instead of being startled by it. All of it is suppressed under prefers-reduced-motion.
+   */
+  .nav-item {
+    @apply relative flex items-center gap-3 rounded-full py-2 pr-3 pl-3.5 text-sm font-medium text-ink-600
+      transition-all duration-200 ease-out;
+  }
+
+  .nav-item:hover {
+    @apply bg-ink-100 text-ink-900;
+  }
+
+  .nav-item.active {
+    @apply bg-brand-50 font-semibold text-brand-700;
+  }
+
+  .nav-icon {
+    @apply h-[18px] w-[18px] shrink-0 text-ink-400 transition-colors duration-200;
+  }
+
+  .nav-item:hover .nav-icon {
+    @apply text-ink-600;
+  }
+
+  .nav-item.active .nav-icon {
+    @apply text-brand-600;
+  }
+
+  /* The accent rail — zero height until the item is the current one. */
+  .nav-rail {
+    @apply absolute top-1/2 left-0 h-0 w-[3px] -translate-y-1/2 rounded-r-full bg-brand-600
+      transition-all duration-200 ease-out;
+  }
+
+  .nav-item.active .nav-rail {
+    @apply h-5;
+  }
+
+  .nav-item-compact {
+    @apply flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-ink-600 transition-colors;
+  }
+
+  .nav-item-compact.active {
+    @apply bg-brand-50 font-semibold text-brand-700;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Thin, unobtrusive scrollbars for the wide scorecard grid. */
+@layer utilities {
+  .scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-ink-300) transparent;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded bg-ink-200;
+  }
+}

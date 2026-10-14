@@ -1,0 +1,20 @@
+node_modules
+dist
+.vite
+*.local
+.DS_Store
+
+# Live staff data pulled from SAP — never commit this
+sap-users.json
+src/data/sap-users.json
+*.sap.json
+
+# Credentials
+.env
+.env.local
+*.key
+*.pem
+
+# Corporate CA certificates — specific to one network, not to the project
+certs/*
+!certs/README.md
