@@ -77,7 +77,9 @@ export type WriteOp =
   // Department marks, attendance, submitted totals
   | { kind: 'deptMarks.set'; periodId: string; departmentId: string; patch: Partial<DepartmentMarks> }
   | { kind: 'attendance.setMany'; periodId: string; rows: Array<{ empId: number; daysAbsent: number | null }> }
+  | { kind: 'attendance.removeMany'; periodId: string; empIds: number[] }
   | { kind: 'submittedTotal.setMany'; periodId: string; rows: Array<{ empId: number; total: number | null }> }
+  | { kind: 'submittedTotal.removeMany'; periodId: string; empIds: number[] }
   | { kind: 'kpiOverride.set'; periodId: string; empId: number; kpi: string; value: number; reason: string }
   | { kind: 'kpiOverride.clear'; overrideId: string }
   | { kind: 'employee.setOutputNotMeasured'; empIds: number[]; value: boolean; reason: string }
@@ -945,9 +947,27 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
 
       for (const row of op.rows) {
         const before = byEmp.get(row.empId)
-        if (str(before?.daysAbsent ?? null) === str(row.daysAbsent)) continue
+
+        /*
+         * Being on the sheet is not the same as having a figure. Putting somebody on it
+         * writes a record holding null, and that is a real change even though the value
+         * did not move — comparing values alone would make "Add people" silently do
+         * nothing for anybody who was not already there.
+         */
+        const isNew = before === undefined
+        if (!isNew && str(before.daysAbsent) === str(row.daysAbsent)) continue
+
         changed += 1
-        audit('Attendance', `${row.empId}|${op.periodId}`, `Days absent — ${employeeLabel(row.empId)}`, before?.daysAbsent ?? '', row.daysAbsent, op.periodId)
+        audit(
+          'Attendance',
+          `${row.empId}|${op.periodId}`,
+          isNew && row.daysAbsent === null
+            ? `Added to the attendance sheet — ${employeeLabel(row.empId)}`
+            : `Days absent — ${employeeLabel(row.empId)}`,
+          before?.daysAbsent ?? '',
+          row.daysAbsent,
+          op.periodId,
+        )
         byEmp.set(row.empId, { periodId: op.periodId, empId: row.empId, daysAbsent: row.daysAbsent, updatedBy: ctx.actorUserId, updatedAt: ctx.now })
       }
 
@@ -957,7 +977,39 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
       return {
         state: { ...state, attendance: [...kept, ...byEmp.values()] },
         logs,
-        message: `Attendance saved for ${changed} ${changed === 1 ? 'person' : 'people'}.`,
+        message: `Attendance sheet updated for ${changed} ${changed === 1 ? 'person' : 'people'}.`,
+      }
+    }
+
+    case 'attendance.removeMany': {
+      const picked = new Set(op.empIds)
+      const going = state.attendance.filter((a) => a.periodId === op.periodId && picked.has(a.empId))
+      if (going.length === 0) return { state, logs: [], message: 'Nothing to remove.' }
+
+      for (const row of going) {
+        audit('Attendance', `${row.empId}|${op.periodId}`, `Taken off the attendance sheet — ${employeeLabel(row.empId)}`, row.daysAbsent ?? '', '', op.periodId)
+      }
+
+      return {
+        state: { ...state, attendance: state.attendance.filter((a) => !(a.periodId === op.periodId && picked.has(a.empId))) },
+        logs,
+        message: `${going.length} taken off the sheet. They still need a figure before the month can be signed off.`,
+      }
+    }
+
+    case 'submittedTotal.removeMany': {
+      const picked = new Set(op.empIds)
+      const going = state.submittedTotals.filter((t) => t.periodId === op.periodId && picked.has(t.empId))
+      if (going.length === 0) return { state, logs: [], message: 'Nothing to remove.' }
+
+      for (const row of going) {
+        audit('SubmittedTotal', `${row.empId}|${op.periodId}`, `Taken off the totals sheet — ${employeeLabel(row.empId)}`, row.total ?? '', '', op.periodId)
+      }
+
+      return {
+        state: { ...state, submittedTotals: state.submittedTotals.filter((t) => !(t.periodId === op.periodId && picked.has(t.empId))) },
+        logs,
+        message: `${going.length} taken off the sheet.`,
       }
     }
 
@@ -967,9 +1019,21 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
 
       for (const row of op.rows) {
         const before = byEmp.get(row.empId)
-        if (str(before?.total ?? null) === str(row.total)) continue
+        // As above: putting somebody on the sheet is a change, even with no figure yet.
+        const isNew = before === undefined
+        if (!isNew && str(before.total) === str(row.total)) continue
+
         changed += 1
-        audit('SubmittedTotal', `${row.empId}|${op.periodId}`, `Total /100 — ${employeeLabel(row.empId)}`, before?.total ?? '', row.total, op.periodId)
+        audit(
+          'SubmittedTotal',
+          `${row.empId}|${op.periodId}`,
+          isNew && row.total === null
+            ? `Added to the totals sheet — ${employeeLabel(row.empId)}`
+            : `Total /100 — ${employeeLabel(row.empId)}`,
+          before?.total ?? '',
+          row.total,
+          op.periodId,
+        )
         byEmp.set(row.empId, { periodId: op.periodId, empId: row.empId, total: row.total, updatedBy: ctx.actorUserId, updatedAt: ctx.now })
       }
 

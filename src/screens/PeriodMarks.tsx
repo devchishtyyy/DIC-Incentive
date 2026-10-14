@@ -24,8 +24,10 @@ import { formatScore } from '../domain/format'
 import type { DepartmentMarks } from '../domain/types'
 import { useApp } from '../store/AppStore'
 import { displayName, employeesInRollup } from '../store/selectors'
+import { AddPeopleDialog } from '../components/AddPeopleDialog'
+import { useBulkSelection } from '../components/BulkSelect'
 import { NumberColumn, useNumberColumn } from '../components/NumberColumn'
-import { Badge, EmptyState, Field, GuardedButton, Icon, InfoNote, PageHeader, PeriodBadge, Tooltip } from '../components/ui'
+import { Badge, ConfirmDialog, EmptyState, Field, GuardedButton, Icon, InfoNote, PageHeader, PeriodBadge, Tooltip, type ConfirmConfig } from '../components/ui'
 
 type Tab = 'department' | 'attendance' | 'totals'
 
@@ -281,23 +283,46 @@ function AttendanceTab() {
   const { state, period, allow, write } = useApp()
   const decision = allow('periodMarks.edit')
   const locked = period.status === 'Locked' || period.status === 'HOD Signed'
+  const editable = decision.allowed && !locked
   const divisor = state.settings.prorataDivisor
 
-  const employees = useMemo(() => employeesInRollup(state), [state])
+  const [addOpen, setAddOpen] = useState(false)
+  const [confirm, setConfirm] = useState<ConfirmConfig | null>(null)
+
+  const everyone = useMemo(() => employeesInRollup(state), [state])
+
+  /**
+   * The sheet is what has been added, not the whole roster — the same bargain as Daily
+   * Entry, where a row exists because somebody put it there. Anybody not on it still
+   * blocks sign-off, so the notice below says who is missing and offers to add them.
+   */
+  const onSheet = useMemo(() => {
+    const ids = new Set(state.attendance.filter((a) => a.periodId === period.periodId).map((a) => a.empId))
+    return everyone.filter((employee) => ids.has(employee.empId))
+  }, [everyone, state.attendance, period.periodId])
+
+  const onSheetIds = useMemo(() => new Set(onSheet.map((employee) => employee.empId)), [onSheet])
+  const missing = everyone.filter((employee) => !onSheetIds.has(employee.empId))
 
   const initial = useMemo(() => {
     const out: Record<number, string> = {}
-    for (const employee of employees) {
+    for (const employee of onSheet) {
       const row = state.attendance.find((a) => a.periodId === period.periodId && a.empId === employee.empId)
       out[employee.empId] = row?.daysAbsent === null || row?.daysAbsent === undefined ? '' : String(row.daysAbsent)
     }
     return out
-  }, [employees, state.attendance, period.periodId])
+  }, [onSheet, state.attendance, period.periodId])
 
   const column = useNumberColumn(initial)
   useEffect(() => column.reset(initial), [initial])
 
-  const blank = employees.filter((employee) => (column.draft[employee.empId] ?? '').trim() === '').length
+  const selectableIds = useMemo(() => (editable ? onSheet.map((employee) => employee.empId) : []), [onSheet, editable])
+  const selection = useBulkSelection(selectableIds)
+
+  const blank = onSheet.filter((employee) => (column.draft[employee.empId] ?? '').trim() === '').length
+
+  const addPeople = (empIds: number[]) =>
+    write({ kind: 'attendance.setMany', periodId: period.periodId, rows: empIds.map((empId) => ({ empId, daysAbsent: null })) })
 
   const save = () => {
     const rows = column.changed.map((empId) => {
@@ -314,24 +339,85 @@ function AttendanceTab() {
         A blank blocks sign-off; <strong>0 is a real answer</strong> worth full marks.
       </InfoNote>
 
+      {/* --- Anybody not on the sheet still blocks ------------------------- */}
+      {missing.length > 0 && (
+        <div className="card flex flex-wrap items-center gap-3 border-warn-100 bg-warn-50 p-3">
+          <Icon name="alert" className="h-5 w-5 shrink-0 text-warn-600" />
+          <p className="min-w-0 flex-1 text-sm text-warn-700">
+            <strong>
+              {missing.length} {missing.length === 1 ? 'person is' : 'people are'} not on this sheet.
+            </strong>{' '}
+            They still need a figure before the month can be signed off.
+          </p>
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant="default"
+            size="sm"
+            onClick={() => addPeople(missing.map((employee) => employee.empId))}
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" /> Add all {missing.length}
+          </GuardedButton>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-ink-500">
-          {employees.length} on the incentive list · {blank} still blank
+          {onSheet.length} of {everyone.length} on the sheet · {blank} still blank
         </span>
-        <GuardedButton
-          decision={{ allowed: decision.allowed && !locked, reason: locked ? 'The period is closed to edits.' : decision.reason }}
-          variant={column.changed.length > 0 ? 'primary' : 'default'}
-          blockedReason={column.changed.length === 0 && decision.allowed && !locked ? 'Nothing has changed.' : undefined}
-          onClick={save}
-        >
-          <Icon name="check" className="h-3.5 w-3.5" /> Save {column.changed.length > 0 ? `${column.changed.length} change${column.changed.length === 1 ? '' : 's'}` : 'attendance'}
-        </GuardedButton>
+        <div className="flex flex-wrap gap-2">
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant="default"
+            onClick={() => setAddOpen(true)}
+            blockedReason={missing.length === 0 && editable ? 'Everybody is already on the sheet.' : undefined}
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" /> Add people
+          </GuardedButton>
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant={column.changed.length > 0 ? 'primary' : 'default'}
+            blockedReason={column.changed.length === 0 && editable ? 'Nothing has changed.' : undefined}
+            onClick={save}
+          >
+            <Icon name="check" className="h-3.5 w-3.5" /> Save
+            {column.changed.length > 0 ? ` ${column.changed.length} change${column.changed.length === 1 ? '' : 's'}` : ' attendance'}
+          </GuardedButton>
+        </div>
       </div>
 
       <NumberColumn
         heading="Days absent"
         unit="Days absent"
-        rows={employees.map((employee) => ({
+        selection={editable ? selection : undefined}
+        emptyTitle="Nobody on the attendance sheet yet"
+        emptyBody="Add people to enter their days absent. Everybody on the incentive list needs a figure before the month can be signed off."
+        bulkActions={
+          <GuardedButton
+            decision={{ allowed: editable, reason: decision.reason }}
+            variant="bad"
+            size="sm"
+            onClick={() =>
+              setConfirm({
+                title: `Take ${selection.count} off the attendance sheet?`,
+                body: (
+                  <p>
+                    Their days-absent figures are deleted. They stay on the incentive list and will still block sign-off
+                    until somebody gives them a figure.
+                  </p>
+                ),
+                confirmLabel: `Remove ${selection.count}`,
+                variant: 'bad',
+                onConfirm: () => {
+                  write({ kind: 'attendance.removeMany', periodId: period.periodId, empIds: selection.selected })
+                  selection.clear()
+                },
+              })
+            }
+          >
+            <Icon name="trash" className="h-3.5 w-3.5" /> Remove
+          </GuardedButton>
+        }
+        rows={onSheet.map((employee) => ({
           key: employee.empId,
           label: displayName(employee),
           sub: (() => {
@@ -343,16 +429,28 @@ function AttendanceTab() {
         }))}
         draft={column.draft}
         onChange={(key, value) => column.setDraft((current) => ({ ...current, [key]: value }))}
-        disabled={!decision.allowed || locked}
+        disabled={!editable}
         disabledReason={locked ? 'The period is closed to edits.' : decision.reason}
         invalid={(value) => {
           const trimmed = value.trim()
           if (trimmed === '') return null
           const parsed = Number(trimmed)
           if (!Number.isFinite(parsed) || parsed < 0) return 'Days absent cannot be negative.'
+          if (parsed > divisor) return `More than the ${divisor} working days in a period — attendance marks will be zero.`
           return null
         }}
       />
+
+      <AddPeopleDialog
+        open={addOpen}
+        title={`Add people to the attendance sheet — ${period.label}`}
+        confirmLabel="person"
+        candidates={everyone}
+        alreadyOn={onSheetIds}
+        onClose={() => setAddOpen(false)}
+        onAdd={addPeople}
+      />
+      <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
     </div>
   )
 }
@@ -363,28 +461,40 @@ function SubmittedTotalsTab() {
   const { state, period, allow, write } = useApp()
   const decision = allow('periodMarks.edit')
   const locked = period.status === 'Locked' || period.status === 'HOD Signed'
+  const editable = decision.allowed && !locked
 
-  const submittedDepartments = new Set(
-    state.departments.filter((d) => d.scoringMode === 'submittedTotal').map((d) => d.departmentId),
-  )
-  const employees = useMemo(
-    () => employeesInRollup(state).filter((employee) => submittedDepartments.has(employee.departmentId)),
-    [state, submittedDepartments],
-  )
+  const [addOpen, setAddOpen] = useState(false)
+  const [confirm, setConfirm] = useState<ConfirmConfig | null>(null)
+
+  const eligible = useMemo(() => {
+    const submits = new Set(state.departments.filter((d) => d.scoringMode === 'submittedTotal').map((d) => d.departmentId))
+    return employeesInRollup(state).filter((employee) => submits.has(employee.departmentId))
+  }, [state])
+
+  const onSheet = useMemo(() => {
+    const ids = new Set(state.submittedTotals.filter((t) => t.periodId === period.periodId).map((t) => t.empId))
+    return eligible.filter((employee) => ids.has(employee.empId))
+  }, [eligible, state.submittedTotals, period.periodId])
+
+  const onSheetIds = useMemo(() => new Set(onSheet.map((employee) => employee.empId)), [onSheet])
+  const missing = eligible.filter((employee) => !onSheetIds.has(employee.empId))
 
   const initial = useMemo(() => {
     const out: Record<number, string> = {}
-    for (const employee of employees) {
+    for (const employee of onSheet) {
       const row = state.submittedTotals.find((t) => t.periodId === period.periodId && t.empId === employee.empId)
       out[employee.empId] = row?.total === null || row?.total === undefined ? '' : String(row.total)
     }
     return out
-  }, [employees, state.submittedTotals, period.periodId])
+  }, [onSheet, state.submittedTotals, period.periodId])
 
   const column = useNumberColumn(initial)
   useEffect(() => column.reset(initial), [initial])
 
-  if (employees.length === 0) {
+  const selectableIds = useMemo(() => (editable ? onSheet.map((employee) => employee.empId) : []), [onSheet, editable])
+  const selection = useBulkSelection(selectableIds)
+
+  if (eligible.length === 0) {
     return (
       <div className="card">
         <EmptyState
@@ -395,6 +505,9 @@ function SubmittedTotalsTab() {
     )
   }
 
+  const addPeople = (empIds: number[]) =>
+    write({ kind: 'submittedTotal.setMany', periodId: period.periodId, rows: empIds.map((empId) => ({ empId, total: null })) })
+
   const save = () => {
     const rows = column.changed.map((empId) => {
       const raw = (column.draft[empId] ?? '').trim()
@@ -403,6 +516,8 @@ function SubmittedTotalsTab() {
     write({ kind: 'submittedTotal.setMany', periodId: period.periodId, rows })
   }
 
+  const blank = onSheet.filter((employee) => (column.draft[employee.empId] ?? '').trim() === '').length
+
   return (
     <div className="space-y-3">
       <InfoNote>
@@ -410,29 +525,86 @@ function SubmittedTotalsTab() {
         computed total does.
       </InfoNote>
 
-      <div className="flex justify-end">
-        <GuardedButton
-          decision={{ allowed: decision.allowed && !locked, reason: locked ? 'The period is closed to edits.' : decision.reason }}
-          variant={column.changed.length > 0 ? 'primary' : 'default'}
-          blockedReason={column.changed.length === 0 && decision.allowed && !locked ? 'Nothing has changed.' : undefined}
-          onClick={save}
-        >
-          <Icon name="check" className="h-3.5 w-3.5" /> Save totals
-        </GuardedButton>
+      {missing.length > 0 && (
+        <div className="card flex flex-wrap items-center gap-3 border-warn-100 bg-warn-50 p-3">
+          <Icon name="alert" className="h-5 w-5 shrink-0 text-warn-600" />
+          <p className="min-w-0 flex-1 text-sm text-warn-700">
+            <strong>
+              {missing.length} {missing.length === 1 ? 'person is' : 'people are'} not on this sheet.
+            </strong>{' '}
+            They still need a total before the month can be signed off.
+          </p>
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant="default"
+            size="sm"
+            onClick={() => addPeople(missing.map((employee) => employee.empId))}
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" /> Add all {missing.length}
+          </GuardedButton>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-ink-500">
+          {onSheet.length} of {eligible.length} on the sheet · {blank} still blank
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant="default"
+            onClick={() => setAddOpen(true)}
+            blockedReason={missing.length === 0 && editable ? 'Everybody is already on the sheet.' : undefined}
+          >
+            <Icon name="plus" className="h-3.5 w-3.5" /> Add people
+          </GuardedButton>
+          <GuardedButton
+            decision={{ allowed: editable, reason: locked ? 'The period is closed to edits.' : decision.reason }}
+            variant={column.changed.length > 0 ? 'primary' : 'default'}
+            blockedReason={column.changed.length === 0 && editable ? 'Nothing has changed.' : undefined}
+            onClick={save}
+          >
+            <Icon name="check" className="h-3.5 w-3.5" /> Save totals
+          </GuardedButton>
+        </div>
       </div>
 
       <NumberColumn
         heading="Total /100"
         unit="Total /100"
         max={100}
-        rows={employees.map((employee) => ({
+        selection={editable ? selection : undefined}
+        emptyTitle="Nobody on the totals sheet yet"
+        emptyBody="Add people to enter their total out of 100."
+        bulkActions={
+          <GuardedButton
+            decision={{ allowed: editable, reason: decision.reason }}
+            variant="bad"
+            size="sm"
+            onClick={() =>
+              setConfirm({
+                title: `Take ${selection.count} off the totals sheet?`,
+                body: <p>Their totals are deleted. They stay on the incentive list and will still block sign-off until somebody gives them one.</p>,
+                confirmLabel: `Remove ${selection.count}`,
+                variant: 'bad',
+                onConfirm: () => {
+                  write({ kind: 'submittedTotal.removeMany', periodId: period.periodId, empIds: selection.selected })
+                  selection.clear()
+                },
+              })
+            }
+          >
+            <Icon name="trash" className="h-3.5 w-3.5" /> Remove
+          </GuardedButton>
+        }
+        rows={onSheet.map((employee) => ({
           key: employee.empId,
           label: displayName(employee),
           sub: state.departments.find((d) => d.departmentId === employee.departmentId)?.name,
         }))}
         draft={column.draft}
         onChange={(key, value) => column.setDraft((current) => ({ ...current, [key]: value }))}
-        disabled={!decision.allowed || locked}
+        disabled={!editable}
         disabledReason={locked ? 'The period is closed to edits.' : decision.reason}
         invalid={(value) => {
           const trimmed = value.trim()
@@ -442,6 +614,17 @@ function SubmittedTotalsTab() {
           return null
         }}
       />
+
+      <AddPeopleDialog
+        open={addOpen}
+        title={`Add people to the totals sheet — ${period.label}`}
+        confirmLabel="person"
+        candidates={eligible}
+        alreadyOn={onSheetIds}
+        onClose={() => setAddOpen(false)}
+        onAdd={addPeople}
+      />
+      <ConfirmDialog config={confirm} onClose={() => setConfirm(null)} />
     </div>
   )
 }

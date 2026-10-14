@@ -436,3 +436,68 @@ describe('the month-end checklist actually blocks', () => {
     expect(checklistComplete(monthChecklist(empty, period(), TODAY))).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+
+describe('putting people on and off the attendance sheet', () => {
+  const onSheet = (s: AppState) => s.attendance.filter((a) => a.periodId === PERIOD).map((a) => a.empId).sort((x, y) => x - y)
+
+  it('adding somebody creates a row even though they have no figure yet', () => {
+    const bare: AppState = { ...state, attendance: [] }
+    const added = applyWrite(bare, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: null }] }, exec)
+
+    expect(onSheet(added.state)).toEqual([1295])
+    expect(added.logs).toHaveLength(1)
+    expect(added.logs[0].field).toContain('Added to the attendance sheet')
+  })
+
+  it('still blocks sign-off while the figure is blank', () => {
+    const bare: AppState = { ...state, attendance: [] }
+    const added = applyWrite(bare, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: null }] }, exec).state
+    expect(rowFor(added, 1295).blockers.join(' ')).toContain('Days absent')
+  })
+
+  it('does nothing the second time somebody is added', () => {
+    const again = applyWrite(state, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: 2 }] }, exec)
+    expect(again.logs).toHaveLength(0)
+  })
+
+  it('removing takes the row away, and they block again', () => {
+    const removed = applyWrite(state, { kind: 'attendance.removeMany', periodId: PERIOD, empIds: [1295] }, exec)
+    expect(onSheet(removed.state)).not.toContain(1295)
+    expect(rowFor(removed.state, 1295).blockers.join(' ')).toContain('Days absent')
+  })
+
+  it('audits a removal with the figure that was there', () => {
+    const removed = applyWrite(state, { kind: 'attendance.removeMany', periodId: PERIOD, empIds: [1295] }, exec)
+    expect(removed.logs).toHaveLength(1)
+    expect(removed.logs[0].oldValue).toBe('2')
+    expect(removed.logs[0].newValue).toBe('')
+  })
+
+  it('removes several at once and leaves everybody else alone', () => {
+    const removed = applyWrite(state, { kind: 'attendance.removeMany', periodId: PERIOD, empIds: [1295, 2901] }, exec).state
+    expect(onSheet(removed)).toEqual([2902])
+  })
+
+  it('says so rather than throwing when there is nothing to remove', () => {
+    const removed = applyWrite(state, { kind: 'attendance.removeMany', periodId: PERIOD, empIds: [9999] }, exec)
+    expect(removed.state).toBe(state)
+    expect(removed.message).toContain('Nothing to remove')
+  })
+
+  it('touches only the period asked for', () => {
+    const other = applyWrite(state, { kind: 'attendance.setMany', periodId: '2026-08', rows: [{ empId: 1295, daysAbsent: 5 }] }, exec).state
+    const removed = applyWrite(other, { kind: 'attendance.removeMany', periodId: PERIOD, empIds: [1295] }, exec).state
+    expect(removed.attendance.some((a) => a.periodId === '2026-08' && a.empId === 1295)).toBe(true)
+  })
+
+  it('keeps 0 distinct from blank through an add-then-fill', () => {
+    const bare: AppState = { ...state, attendance: [] }
+    const added = applyWrite(bare, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: null }] }, exec).state
+    expect(rowFor(added, 1295).marks.attendance).toBeNull()
+
+    const filled = applyWrite(added, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: 0 }] }, exec).state
+    expect(rowFor(filled, 1295).marks.attendance).toBe(10)
+  })
+})

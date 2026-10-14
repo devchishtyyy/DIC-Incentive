@@ -107,7 +107,7 @@ Navigation is grouped by when you use it, not by what the data is called.
 |---|---|---|
 | Every day | **Daily Entry** — target and output per employee and point, live %age and Score, inline target editing, bulk add and delete, paste Emp IDs from Excel | Office Exec, HOD |
 | Every day | **Scorecard** — the Excel grid: employees down, dates across, Total Avg Score | all |
-| Month end | **Period marks** — the six KPIs that are not production: one set per department (waste, variance, quality, EHS, WCM & 5S), days absent per person, and submitted totals | Office Exec, HOD |
+| Month end | **Period marks** — the six KPIs that are not production: one set per department (waste, variance, quality, EHS, WCM & 5S), days absent per person, and submitted totals. Attendance and totals are grids like Daily Entry: add people, paste a column, Enter walks down, tick and remove | Office Exec, HOD |
 | Month end | **Review & sign-off** — checklist, two sign-offs, both return loops, step history | Office Exec, HOD, Ops |
 | Month end | **Export** — the Employee KPI sheet and the Score Card, CSV and XLSX, with a live preview | Finance, Ops |
 | Setup | **Targets** — type default targets down the column; the HOD's dated changes with reason and history | HOD and Admin edit, others view |
