@@ -425,14 +425,27 @@ The data model does not block any of them: joining and leaving dates, the probat
 grades, sites and the configurable base-rate table are all stored and displayed, they are
 simply not used in a Phase 1 calculation.
 
-### Questions for DIC, carried from the brief
+### Open questions, and what the app does meanwhile
+
+Every one of these is on the Settings screen, showing what is applied today and what the
+alternative would be. Where it is a switch, turning it on needs no code change.
+
+**Settled with this build** — the period is the 16th to the 15th with attendance over a
+fixed 26; waste and variance round to the nearest table row with ties going to the worse
+row; department marks are one value per department per period with per-employee overrides;
+"use department average" is a per-employee flag that is off unless set; Earned is rounded
+to whole rupees per person.
+
+**Still open**
 
 1. Should a missing day ever count as zero for the Production score, or only through Attendance?
 2. Is a plain average across several points correct, or should heavier points count more?
 3. Does a HOD target change need Operations Manager approval, or is the HOD's reason enough?
-4. ~~Is the incentive period always the 17th to the 15th, or does it move?~~ **Settled: the 16th to the 15th.** The start day is a setting, so it can move again without a code change.
-5. Which sites and areas does each HOD cover, and who covers a HOD on leave?
-6. How does the 50% overtime provision interact with the Production score before Phase 3?
-
-Questions 1 to 3 are live switches on the Settings screen — the app applies the default and
-the alternative can be turned on without a code change.
+4. Which sites and departments does each HOD cover, and who covers a HOD on leave?
+5. How does the 50% overtime provision interact with the Production score?
+6. **Are the probation 50% rule and joiner/leaver proration applied today?** And if days
+   before joining are also counted in days absent, absence would be charged twice — once
+   through `(26 − absent) ÷ 26` on attendance and again through `days employed ÷ 26` on
+   Earned. This one needs the Office Executive, not a decision in the app.
+7. Is "Support Production" a Production or a Support rate group? It is not named on the
+   signed sheet; it is seeded as Production because it works the floor.

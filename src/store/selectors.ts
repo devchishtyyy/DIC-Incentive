@@ -471,6 +471,67 @@ export function monthChecklist(state: AppState, period: MonthPeriod, today: IsoD
       ok: health.draftRows === 0,
       detail: health.draftRows === 0 ? 'Every day has been submitted.' : `${health.draftRows} row(s) are still in Draft.`,
     },
+    ...kpiChecklist(state, period.periodId),
+  ]
+}
+
+/**
+ * The checklist items that come from the other six KPIs.
+ *
+ * Separated out because they ask a different question from the production items above:
+ * not "is the daily entry finished" but "is there enough to work out what anybody is
+ * owed". A period can have every day entered and still be unpayable because nobody has
+ * typed the waste percentage.
+ */
+function kpiChecklist(state: AppState, periodId: string): ChecklistItem[] {
+  const rows = periodKpis(state, periodId)
+  if (rows.length === 0) return []
+
+  const unmeasured = rows.filter((row) => row.blockers.some((reason) => reason.includes('not flagged as unmeasured')))
+  const noAttendance = rows.filter((row) => row.blockers.some((reason) => reason.startsWith('Days absent')))
+  const noDeptMarks = rows.filter((row) => row.blockers.some((reason) => reason.includes('marks not set')))
+  const noTotal = rows.filter((row) => row.blockers.some((reason) => reason.startsWith('Total out of 100')))
+
+  const names = (subset: typeof rows) => subset.slice(0, 5).map((row) => row.employee.empId).join(', ')
+  const andMore = (subset: typeof rows) => (subset.length > 5 ? ` and ${subset.length - 5} more` : '')
+
+  return [
+    {
+      label: 'Department marks entered',
+      ok: noDeptMarks.length === 0,
+      detail:
+        noDeptMarks.length === 0
+          ? 'Waste, variance, quality, EHS and WCM & 5S are set for every department.'
+          : `${noDeptMarks.length} employee(s) have no department marks. Enter them on Period Marks.`,
+    },
+    {
+      label: 'Days absent entered',
+      ok: noAttendance.length === 0,
+      detail:
+        noAttendance.length === 0
+          ? 'Everybody has a days-absent figure, including the zeros.'
+          : `${noAttendance.length} without a figure: ${names(noAttendance)}${andMore(noAttendance)}`,
+    },
+    {
+      label: 'Everybody has a Production Score',
+      ok: unmeasured.length === 0,
+      detail:
+        unmeasured.length === 0
+          ? 'Everybody was either measured on their own output or flagged to take the department average.'
+          : `${unmeasured.length} with no production rows and no "output not measured" flag: ${names(unmeasured)}${andMore(unmeasured)}`,
+    },
+    ...(noTotal.length > 0 || rows.some((row) => row.mode === 'submittedTotal')
+      ? [
+          {
+            label: 'Submitted totals entered',
+            ok: noTotal.length === 0,
+            detail:
+              noTotal.length === 0
+                ? 'Every department that submits a total has one for each of its people.'
+                : `${noTotal.length} without a total /100: ${names(noTotal)}${andMore(noTotal)}`,
+          },
+        ]
+      : []),
   ]
 }
 

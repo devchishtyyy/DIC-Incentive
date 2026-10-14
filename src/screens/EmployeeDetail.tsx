@@ -2,7 +2,7 @@
  * Screen 5 — Employee Detail.
  *
  * The employee card, the daily score trend for the period, every entry, the month
- * average, and the other six KPIs as greyed Phase 2 placeholders with their weights.
+ * average, and the other six KPIs with the marks they carry this period.
  */
 
 import { useMemo, useState } from 'react'
@@ -233,7 +233,7 @@ export default function EmployeeDetail() {
         )}
       </div>
 
-      {/* --- Phase 2 placeholders ----------------------------------------------- */}
+      {/* --- The other six KPIs --------------------------------------------------- */}
       <div className="card card-pad">
         <div className="flex items-center gap-2">
           <Icon name="lock" className="h-4 w-4 text-ink-400" />
@@ -267,7 +267,7 @@ export default function EmployeeDetail() {
           <div className="rounded-md border border-dashed border-ink-300 bg-ink-50 px-3 py-2 opacity-70">
             <div className="label">Earned Incentive</div>
             <div className="font-mono text-lg text-ink-400">—</div>
-            <div className="text-[10px] text-ink-400">Approved × Total ÷ 100 (Phase 3)</div>
+            <div className="text-[10px] text-ink-400">Approved × Total ÷ 100</div>
           </div>
         </div>
       </div>

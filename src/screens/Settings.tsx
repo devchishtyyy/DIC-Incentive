@@ -220,9 +220,9 @@ export default function Settings() {
         {/* --- Base incentive table ------------------------------------------- */}
         <div className="card overflow-hidden">
           <div className="border-b border-ink-200 px-4 py-2.5">
-            <h2 className="text-sm font-semibold text-ink-800">Base incentive amounts — held for Phase 3</h2>
+            <h2 className="text-sm font-semibold text-ink-800">Base incentive amounts — as first read from the signed scan</h2>
             <p className="mt-0.5 text-xs text-ink-500">
-              From the signed Incentive Revision 2025/2026 sheet, effective {formatDate(BASE_INCENTIVE_RATES.effectiveFrom)}. Not used in any Phase 1
+              From the signed Incentive Revision 2025/2026 sheet, effective {formatDate(BASE_INCENTIVE_RATES.effectiveFrom)}. Superseded by the editable rate table above, which is what the app actually pays from. Kept for comparison. Not used in any
               calculation. Next revision is due {BASE_INCENTIVE_RATES.nextRevisionDue}, so these stay a table and are never hard-coded.
             </p>
           </div>

@@ -96,6 +96,51 @@ export const ASSUMPTIONS = [
     alternative: 'Round each daily score before averaging.',
     source: 'Build brief section 6, open question 3',
   },
+
+  // --- Decisions recorded with the next build (brief section 8) -------------
+  {
+    id: 'periodRule',
+    question: 'What dates does an incentive period cover, and what does attendance divide by?',
+    applied: 'The 16th to the 15th, with attendance over a fixed 26.',
+    alternative: 'A different start day (Settings), or dividing by the period’s real working days.',
+    source: 'Next build, decision 1',
+  },
+  {
+    id: 'tableRounding',
+    question: 'How do waste and variance percentages land on a table row?',
+    applied: 'Rounded to the nearest row, ties to the worse row — 2.85% scores as 2.9%.',
+    alternative: 'Ties to the better row, or no rounding at all.',
+    source: 'Next build, decision 2',
+  },
+  {
+    id: 'departmentMarks',
+    question: 'How are waste, variance, quality, EHS and WCM & 5S set?',
+    applied: 'One value per department per period, with a per-employee override where needed.',
+    alternative: 'Per employee from the start.',
+    source: 'Next build, decision 3',
+  },
+  {
+    id: 'unmeasuredEmployees',
+    question: 'How does somebody with no measured output get a Production Score?',
+    applied: 'A per-employee flag gives them the department average. Off unless set.',
+    alternative: 'Infer it from having no production rows.',
+    source: 'Next build, decision 4',
+  },
+  {
+    id: 'earnedRounding',
+    question: 'How is the Earned amount rounded?',
+    applied: 'Half-up to whole rupees, per person. The period total sums the rounded amounts.',
+    alternative: 'Keep paisa, or round the period total instead of each person.',
+    source: 'Next build, decision 5',
+  },
+  {
+    id: 'probationAndProrata',
+    question: 'Are the probation 50% rule and joiner/leaver proration applied today?',
+    applied: 'Neither. Earned is Approved × Total ÷ 100 for everybody.',
+    alternative:
+      'Probation × 0.5 with HOD approval; Earned × (working days employed ÷ 26) for a joiner or leaver. CHECK WITH THE OFFICE EXECUTIVE — and if days before joining are also counted in days absent, absence would be charged twice, once through attendance and once through proration.',
+    source: 'Next build, decision 6 — unanswered',
+  },
 ] as const
 
 /**

@@ -44,7 +44,7 @@ export default function Login() {
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">DIC</div>
           <div>
             <h1 className="text-lg font-semibold text-ink-900">Production Incentive</h1>
-            <p className="text-sm text-ink-500">Phase 1 prototype · Production / Output KPI</p>
+            <p className="text-sm text-ink-500">Production incentive · all seven KPIs</p>
           </div>
         </header>
 

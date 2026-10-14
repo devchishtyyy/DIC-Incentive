@@ -12,7 +12,7 @@ import { attendanceMarks, toHundredths } from '../domain/calc'
 import { buildBaseState } from '../data/seed'
 import { DEFAULT_DEPARTMENT_ID } from '../data/masters'
 import type { AppState, DailyEntry } from '../domain/types'
-import { periodBlockers, periodKpis } from './selectors'
+import { checklistComplete, monthChecklist, periodBlockers, periodKpis } from './selectors'
 import { applyWrite } from './writes'
 
 const exec = { actorUserId: 'U-EXEC', now: '2026-10-14T09:00:00.000Z' }
@@ -376,5 +376,63 @@ describe('departments that submit one total instead', () => {
     for (const row of periodKpis(flagged, PERIOD)) {
       expect(row.total === null || (Number.isFinite(row.total) && row.total >= 0 && row.total <= 100), String(row.employee.empId)).toBe(true)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('the month-end checklist actually blocks', () => {
+  const period = () => buildBaseState().periods.find((p) => p.periodId === PERIOD)!
+  const TODAY = '2026-10-14'
+
+  it('is not green while somebody has no production rows and no flag', () => {
+    const items = monthChecklist(state, period(), TODAY)
+    const item = items.find((i) => i.label === 'Everybody has a Production Score')!
+    expect(item.ok).toBe(false)
+    expect(item.detail).toContain('2902')
+    expect(checklistComplete(items)).toBe(false)
+  })
+
+  it('goes green once they are flagged', () => {
+    const flagged = applyWrite(state, { kind: 'employee.setOutputNotMeasured', empIds: [2902], value: true, reason: 'No Point' }, exec).state
+    const item = monthChecklist(flagged, period(), TODAY).find((i) => i.label === 'Everybody has a Production Score')!
+    expect(item.ok).toBe(true)
+  })
+
+  it('is not green while days absent is blank for anybody', () => {
+    const blank = applyWrite(state, { kind: 'attendance.setMany', periodId: PERIOD, rows: [{ empId: 1295, daysAbsent: null }] }, exec).state
+    const item = monthChecklist(blank, period(), TODAY).find((i) => i.label === 'Days absent entered')!
+    expect(item.ok).toBe(false)
+    expect(item.detail).toContain('1295')
+  })
+
+  it('counts a zero as entered', () => {
+    const item = monthChecklist(state, period(), TODAY).find((i) => i.label === 'Days absent entered')!
+    // 1295 is on 2 days and the others on 0; none is blank.
+    expect(item.ok).toBe(true)
+  })
+
+  it('is not green while a department has no marks', () => {
+    const cleared = applyWrite(
+      state,
+      { kind: 'deptMarks.set', periodId: PERIOD, departmentId: DEFAULT_DEPARTMENT_ID, patch: { quality: null } },
+      exec,
+    ).state
+    const item = monthChecklist(cleared, period(), TODAY).find((i) => i.label === 'Department marks entered')!
+    expect(item.ok).toBe(false)
+  })
+
+  it('asks for submitted totals only when a department actually submits one', () => {
+    const withoutAny = monthChecklist(state, period(), TODAY)
+    expect(withoutAny.some((i) => i.label === 'Submitted totals entered')).toBe(false)
+
+    const moved = applyWrite(state, { kind: 'employee.setDepartment', empIds: [2902], departmentId: 'DEP-MAINT' }, exec).state
+    const withOne = monthChecklist(moved, period(), TODAY)
+    expect(withOne.find((i) => i.label === 'Submitted totals entered')!.ok).toBe(false)
+  })
+
+  it('still says something sensible when nobody is on the list', () => {
+    const empty: AppState = { ...state, employees: [] }
+    expect(checklistComplete(monthChecklist(empty, period(), TODAY))).toBe(true)
   })
 })
