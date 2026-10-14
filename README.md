@@ -109,7 +109,7 @@ Navigation is grouped by when you use it, not by what the data is called.
 | Every day | **Scorecard** — the Excel grid: employees down, dates across, Total Avg Score | all |
 | Month end | **Period marks** — the six KPIs that are not production: one set per department (waste, variance, quality, EHS, WCM & 5S), days absent per person, and submitted totals | Office Exec, HOD |
 | Month end | **Review & sign-off** — checklist, two sign-offs, both return loops, step history | Office Exec, HOD, Ops |
-| Month end | **Export** — approved periods only, CSV and XLSX in Employee KPI sheet column order | Finance, Ops |
+| Month end | **Export** — the Employee KPI sheet and the Score Card, CSV and XLSX, with a live preview | Finance, Ops |
 | Setup | **Targets** — type default targets down the column; the HOD's dated changes with reason and history | HOD and Admin edit, others view |
 | Setup | **People** — SAP directory, incentive list with bulk MD approval, departments, points, users, day calendar | Admin, MD |
 | Setup | **Audit log** — who, when, what changed, old value, new value, reason | HOD, Ops, Finance, MD, Admin |
@@ -383,6 +383,10 @@ change, the pending MD approval — are reachable from the **Demo Guide** screen
   `User` entity really returns: the `{d:{results}}` envelope, `/Date(…)/` timestamps,
   partial records, duplicate Emp IDs, and every unresolved lookup surfaced rather than
   guessed.
+- `domain/exportRows.test.ts` — the two sheets Finance receives: the Employee KPI column
+  order from the workbook, the grand total summing the rounded Earned column so the sheet
+  adds up to itself, and the rule that a missing figure exports **blank, never 0** — a zero
+  in a payroll file is a payment decision, a blank is an admission that nobody supplied it.
 - `domain/kpiTables.test.ts` — the waste and variance tables: every row, both sides of
   every rounding tie (ties go to the *worse* row, worth 2.5 marks on waste), monotonicity
   across the whole range, attendance at 0, 2 and 26+ days absent, and the brief's worked
