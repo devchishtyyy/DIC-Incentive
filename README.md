@@ -32,6 +32,23 @@ A score never exceeds 20 — 4.75 batches against a target of 4 shows **118.8%**
 **20.00**, never 23.75. A day with no entry is never counted as a zero; absence belongs to
 the Attendance KPI in a later phase.
 
+### The incentive period
+
+**The 16th of one month to the 15th of the next** — not a calendar month. That span is
+where the policy's "÷ 26" comes from: 30 or 31 days, Sundays off, 26 working days left.
+
+Periods are generated from a **start day** setting (Settings → Period starts on day,
+default 16) rather than maintained by hand, so moving it moves every period together,
+keeping their ids and statuses. DIC used the 17th at least once, which is why it is a
+setting; 1 turns a period into a calendar month. Days above 28 are refused, because
+February cannot honour them.
+
+One consequence worth knowing: **26 is a fixed divisor, not a count of the period's
+working days.** They agree in most months and part company across February, where
+16 Feb – 15 Mar is 28 days and yields 24 Mon–Sat days. Attendance divides by the fixed 26
+either way — that is the policy's rule, and `periods.test.ts` pins the difference so it
+cannot be "fixed" into something that changes people's pay.
+
 ### The eight screens
 
 Navigation is grouped by when you use it, not by what the data is called.
@@ -258,14 +275,14 @@ Generated in code from a fixed seed, so every machine shows the same numbers. **
 Emp IDs in the demo roster are invented — no real DIC staff appear in the source.** Today
 is pinned to **1 October 2026**.
 
-35 employees · 25 points · ~780 rows in the main 17 Aug – 15 Sep period · four periods,
+35 employees · 25 points · ~780 rows in the main 16 Aug – 15 Sep period · four periods,
 one in each workflow state:
 
 | Period | Status | What it is for |
 |---|---|---|
 | 16 Jun – 15 Jul | **Locked** | Finance export, and the reopen path |
 | 16 Jul – 15 Aug | **HOD Signed** | the Operations Manager's approval step |
-| 17 Aug – 15 Sep | **Submitted** | the main demo; still unsigned, with a returned-then-resubmitted history |
+| 16 Aug – 15 Sep | **Submitted** | the main demo; still unsigned, with a returned-then-resubmitted history |
 | 16 Sep – 15 Oct | **Open** | fresh entry, with the live warnings |
 
 The app opens on the **Sep–Oct** period, and Daily Entry lands on **1 October** — a sheet
@@ -315,6 +332,13 @@ change, the pending MD approval — are reachable from the **Demo Guide** screen
   `User` entity really returns: the `{d:{results}}` envelope, `/Date(…)/` timestamps,
   partial records, duplicate Emp IDs, and every unresolved lookup surfaced rather than
   guessed.
+- `domain/periods.test.ts` — the 16th-to-15th period: bounds across month ends, February
+  and a leap February, the new year, every day of a year landing in exactly one period,
+  no gap or overlap at any start day, restating periods when the setting moves, and the
+  one place the fixed 26 stops matching the real working-day count.
+- `domain/departmentAverage.test.ts` — the department average ignoring unmeasured
+  employees rather than counting them as zero (the difference between 15 and 7.5), and the
+  under-target warning firing on a mistyped target but not on a merely bad day.
 - `domain/gridNav.test.ts` — the Excel-style column walk: Enter down, Shift+Enter up,
   stopping at both ends, skipping read-only rows, and landing somewhere sensible when the
   focused row is deleted underneath you.
@@ -342,7 +366,7 @@ simply not used in a Phase 1 calculation.
 1. Should a missing day ever count as zero for the Production score, or only through Attendance?
 2. Is a plain average across several points correct, or should heavier points count more?
 3. Does a HOD target change need Operations Manager approval, or is the HOD's reason enough?
-4. Is the incentive period always the 17th to the 15th, or does it move?
+4. ~~Is the incentive period always the 17th to the 15th, or does it move?~~ **Settled: the 16th to the 15th.** The start day is a setting, so it can move again without a code change.
 5. Which sites and areas does each HOD cover, and who covers a HOD on leave?
 6. How does the 50% overtime provision interact with the Production score before Phase 3?
 

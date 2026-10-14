@@ -22,8 +22,10 @@ import type {
   IsoDate,
   MonthOverride,
   MonthPeriod,
+  PeriodStatus,
   TargetRule,
 } from '../domain/types'
+import { periodsEndingAt } from '../domain/periods'
 import { POINT_ALIASES, POINTS, USERS } from './masters'
 import { assignedPointIds, PLANT_ROSTER, SAP_EMP_ID_OFFSET } from './plantMasters'
 import { DEMO_EMPLOYEES } from './demoRoster'
@@ -34,12 +36,18 @@ export const SCHEMA_VERSION = 4
 const SEED = 20260817
 
 /** The four demo periods — one in each workflow state (seeded scenario 10). */
-export const PERIODS: MonthPeriod[] = [
-  { periodId: '2026-06', label: '16 Jun – 15 Jul 2026', startDate: '2026-06-16', endDate: '2026-07-15', status: 'Locked' },
-  { periodId: '2026-07', label: '16 Jul – 15 Aug 2026', startDate: '2026-07-16', endDate: '2026-08-15', status: 'HOD Signed' },
-  { periodId: '2026-08', label: '17 Aug – 15 Sep 2026', startDate: '2026-08-17', endDate: '2026-09-15', status: 'Submitted' },
-  { periodId: '2026-09', label: '16 Sep – 15 Oct 2026', startDate: '2026-09-16', endDate: '2026-10-15', status: 'Open' },
-]
+/**
+ * Four periods, one in each workflow state, generated from the start-day setting rather
+ * than written out by hand — so changing the setting moves every period together.
+ *
+ * The Aug period used to start on the 17th, which was open question 4 showing up as data.
+ * The period rule is now settled at the 16th and these are generated from it.
+ */
+const PERIOD_STATUSES: PeriodStatus[] = ['Locked', 'HOD Signed', 'Submitted', 'Open']
+
+export const PERIODS: MonthPeriod[] = periodsEndingAt('2026-09', 4, DEFAULT_SETTINGS.periodStartDay).map(
+  (period, index) => ({ ...period, status: PERIOD_STATUSES[index] }),
+)
 
 /** The period the Excel actually covers, and the one the demo narrative centres on. */
 export const MAIN_PERIOD_ID = '2026-08'

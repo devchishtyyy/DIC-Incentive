@@ -19,13 +19,15 @@ import { useApp } from '../store/AppStore'
 
 const NUMERIC_SETTINGS: Array<{ key: keyof AppSettings; label: string; hint: string; step?: number }> = [
   { key: 'scoreCap', label: 'Score cap', hint: 'Production / Output is 20 of the 100 incentive marks (policy section 5). A score can never exceed it.' },
-  { key: 'prorataDivisor', label: 'Pro-rata divisor', hint: 'Days worked ÷ 26 for joiners, leavers and absence (policy section 2.2). Used from Phase 3.' },
+  { key: 'periodStartDay', label: 'Period starts on day', hint: 'The incentive period runs from this day to the day before it in the next month. Changing it moves every period. 1 to 28 — above 28 cannot be honoured in February.' },
+  { key: 'prorataDivisor', label: 'Working days per period (÷ divisor)', hint: 'A fixed 26, not a count of the period’s actual working days. Attendance is (26 − days absent) ÷ 26 × 10.' },
   { key: 'reviewDeadlineDay', label: 'Review deadline day', hint: 'Monthly marks are due before this day of the month, ahead of the salary run (policy section 10).' },
   { key: 'bandLow', label: 'Scorecard red band below', hint: 'Cells below this score are red on the Monthly Scorecard.' },
   { key: 'bandHigh', label: 'Scorecard green band above', hint: 'Cells above this score are green; between the two they are amber.' },
   { key: 'outlierActualMultiple', label: 'Outlier — output above target ×', hint: 'A soft warning when the Output Batch exceeds this multiple of the Daily Target.', step: 0.5 },
   { key: 'outlierTargetFraction', label: 'Outlier — target below default fraction', hint: 'A soft warning when the day target falls below this fraction of the point default.', step: 0.05 },
-  { key: 'underTargetFraction', label: 'Dashboard under-target fraction', hint: 'The dashboard counts a scored row as under-performing below this fraction of target.', step: 0.05 },
+  { key: 'underTargetTypoFraction', label: 'Outlier — output below target fraction', hint: 'A soft warning on Daily Entry when output falls below this fraction of target — usually a mistyped target. Warns, never blocks.', step: 0.05 },
+  { key: 'underTargetFraction', label: 'Under-target fraction', hint: 'A scored row counts as under-performing below this fraction of target.', step: 0.05 },
 ]
 
 const CAPABILITY_LABELS: Record<Capability, string> = {

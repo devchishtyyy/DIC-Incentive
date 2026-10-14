@@ -9,8 +9,21 @@
 /** Production / Output KPI weight — 20 of the 100 incentive marks (policy section 5). */
 export const SCORE_CAP = 20
 
-/** Pro-rata divisor for joiners, leavers and absence (policy section 2.2). */
+/**
+ * Working days in an incentive period, and the attendance denominator.
+ *
+ * A *fixed* 26, not a count of the period's actual working days. The two agree in most
+ * months and come apart in February, where 16 Feb to 15 Mar is only 28 days and yields 24
+ * Mon–Sat days — see `periods.test.ts`. The fixed figure is the decision recorded in the
+ * brief, and it is what the signed policy's "÷ 26" means.
+ */
 export const PRORATA_DIVISOR = 26
+
+/**
+ * The day an incentive period starts; it runs to the day before this in the next month.
+ * A setting rather than a constant because DIC has used the 17th at least once.
+ */
+export const PERIOD_START_DAY = 16
 
 /** Monthly marks must be submitted before the 20th, ahead of the salary run (policy section 10). */
 export const REVIEW_DEADLINE_DAY = 20
@@ -27,6 +40,8 @@ export const OUTLIER = {
   actualOverTargetMultiple: 3,
   /** Warn when the day's target drops below this fraction of the point's default target. */
   targetUnderDefaultFraction: 0.2,
+  /** Warn when output falls below this fraction of target — usually a mistyped target. */
+  underTargetTypoFraction: 0.1,
 }
 
 /** Monthly Scorecard colour scale (out of 20). */
@@ -116,7 +131,9 @@ export interface AppSettings {
   reviewDeadlineDay: number
   outlierActualMultiple: number
   outlierTargetFraction: number
+  underTargetTypoFraction: number
   underTargetFraction: number
+  periodStartDay: number
   bandLow: number
   bandHigh: number
   multiRowWeighting: 'average' | 'targetWeighted'
@@ -129,7 +146,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reviewDeadlineDay: REVIEW_DEADLINE_DAY,
   outlierActualMultiple: OUTLIER.actualOverTargetMultiple,
   outlierTargetFraction: OUTLIER.targetUnderDefaultFraction,
+  underTargetTypoFraction: OUTLIER.underTargetTypoFraction,
   underTargetFraction: UNDER_TARGET_FRACTION,
+  periodStartDay: PERIOD_START_DAY,
   bandLow: SCORE_BANDS.low,
   bandHigh: SCORE_BANDS.high,
   multiRowWeighting: 'average',

@@ -6,6 +6,7 @@
 
 import type { AppSettings } from '../config/policy'
 import { awaitingSapDetail } from '../data/plantMasters'
+import { restatePeriods } from '../domain/periods'
 import { describeSchedule, type SyncSchedule, type SyncStatus } from '../domain/syncSchedule'
 import type {
   ApprovalStep,
@@ -813,7 +814,30 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
         if (str(state.settings[key]) !== str(op.patch[key])) audit('Settings', key, key, state.settings[key], op.patch[key])
       }
       if (logs.length === 0) return { state, logs: [], message: '' }
-      return { state: { ...state, settings: { ...state.settings, ...op.patch } }, logs, message: 'Settings saved.' }
+
+      const settings = { ...state.settings, ...op.patch }
+
+      /*
+       * The period start day is not just a number on a screen: it decides which dates each
+       * period covers. Changing it has to move the periods with it, or the setting and the
+       * data disagree and every date boundary is wrong until somebody notices.
+       *
+       * Ids and statuses are kept, so entries, approvals and the audit trail still point at
+       * the same periods. A Locked period moves too — its dates were always derived from
+       * this rule — but what it contains does not change.
+       */
+      if ('periodStartDay' in op.patch && settings.periodStartDay !== state.settings.periodStartDay) {
+        const periods = restatePeriods(state.periods, settings.periodStartDay)
+        for (const period of periods) {
+          const before = state.periods.find((p) => p.periodId === period.periodId)
+          if (before && (before.startDate !== period.startDate || before.endDate !== period.endDate)) {
+            audit('MonthPeriod', period.periodId, 'Dates', `${before.startDate} to ${before.endDate}`, `${period.startDate} to ${period.endDate}`, 'Period start day changed')
+          }
+        }
+        return { state: { ...state, settings, periods }, logs, message: `Settings saved. ${periods.length} periods moved to start on the ${settings.periodStartDay}th.` }
+      }
+
+      return { state: { ...state, settings }, logs, message: 'Settings saved.' }
     }
 
     // --- Roster sync ------------------------------------------------------

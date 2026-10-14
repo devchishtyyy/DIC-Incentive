@@ -182,6 +182,26 @@ export function calcMonthlyFromEntries(
 }
 
 // ---------------------------------------------------------------------------
+// Department
+// ---------------------------------------------------------------------------
+
+/**
+ * The department's Production Score: the mean of its **measured** employees' period scores.
+ *
+ * Measured means the employee has a period score at all. Somebody with no production rows
+ * contributes nothing here — including them as a zero would drag the average down and then
+ * that same depressed average is what gets handed to them, which compounds the error.
+ *
+ * Null when nobody in the department was measured, never 0 — there is a real difference
+ * between "the department averaged zero" and "there is nothing to average".
+ */
+export function departmentAverage(periodScores: ReadonlyArray<number | null>): number | null {
+  const measured = periodScores.filter((score): score is number => isUsableNumber(score))
+  if (measured.length === 0) return null
+  return measured.reduce((sum, score) => sum + score, 0) / measured.length
+}
+
+// ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
 
@@ -207,6 +227,7 @@ export const ISSUE = {
   DUPLICATE_ROW: 'DUPLICATE_ROW',
   OUTLIER_ACTUAL: 'OUTLIER_ACTUAL',
   OUTLIER_TARGET: 'OUTLIER_TARGET',
+  UNDER_TARGET_TYPO: 'UNDER_TARGET_TYPO',
   NON_WORKING_DAY: 'NON_WORKING_DAY',
   PENDING_MD_APPROVAL: 'PENDING_MD_APPROVAL',
   OUTSIDE_SERVICE_DATES: 'OUTSIDE_SERVICE_DATES',
@@ -327,6 +348,28 @@ export function validateEntry(entry: DailyEntry, ctx: ValidationContext): Valida
       code: ISSUE.OUTLIER_ACTUAL,
       severity: 'warning',
       message: `Output Batch is more than ${settings.outlierActualMultiple}× the Daily Target — likely a typo. The score still caps at ${settings.scoreCap}. Confirm to keep it.`,
+      acknowledgeable: true,
+      blocks: 'submit',
+    })
+  }
+
+  /*
+   * Output far below target is usually a mistyped *target*, not a catastrophic day: a
+   * target entered as 400 instead of 4 puts the row at 1% and scores it 0.2 out of 20.
+   * Warn, never block — a genuinely terrible day is somebody's real number and the app
+   * has no business refusing it.
+   */
+  if (
+    isUsableNumber(entry.target) &&
+    entry.target > 0 &&
+    isUsableNumber(entry.actualBatches) &&
+    entry.actualBatches > 0 &&
+    entry.actualBatches < entry.target * settings.underTargetTypoFraction
+  ) {
+    issues.push({
+      code: ISSUE.UNDER_TARGET_TYPO,
+      severity: 'warning',
+      message: `Output Batch is under ${Math.round(settings.underTargetTypoFraction * 100)}% of the Daily Target — check the target is not mistyped. Confirm to keep it.`,
       acknowledgeable: true,
       blocks: 'submit',
     })
