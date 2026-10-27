@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "DIC Pakistan Limited — Production Incentive App, Phase 1 (Daily Target / Output Batch)",
+  "description": "DIC Pakistan Limited \u2014 Production Incentive App, Phase 1 (Daily Target / Output Batch)",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

@@ -126,9 +126,24 @@ export default defineConfig(({ command, mode }) => {
     base: './',
     plugins: [react(), tailwindcss(), sapApiPlugin({ credentials, range, caBundle, insecureTls })],
 
+    /*
+     * One server for both the frontend and /api/*, which is why web.config points both
+     * of its rewrite rules at the same port.
+     *
+     * 6004 is the port IIS forwards to; set DIC_PORT to move it, and change web.config to
+     * match. It opens a browser locally and does not on the server, where there is nobody
+     * sitting at it.
+     */
     server: {
-      port: 5173,
-      open: true,
+      port: Number(env.DIC_PORT) || 6004,
+      // Fail rather than quietly move to the next free port. Behind IIS a silent move
+      // means the rewrite rules forward to a dead port and the app simply looks down.
+      strictPort: true,
+      host: '127.0.0.1',
+      open: !process.env.DIC_SERVER,
+      // IIS forwards the original Host header, so the app has to accept it. Without this
+      // Vite answers 403 to everything that did not come from localhost by name.
+      allowedHosts: env.DIC_ALLOWED_HOSTS ? env.DIC_ALLOWED_HOSTS.split(',').map((h) => h.trim()) : true,
     },
 
     test: {
