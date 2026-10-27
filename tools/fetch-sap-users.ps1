@@ -28,9 +28,11 @@
 [CmdletBinding()]
 param(
     [string] $ApiServer  = 'https://api44.sapsf.com',
-    [string] $ClientId   = 'NmEwYWE4MDJmYmVlMjg2NGVhNzhjYzcwOWY2OA',
-    [string] $CompanyId  = 'packagesli',
-    [string] $UserId     = 'ECAdmin',
+    # Read from the environment, never hard-coded: this file is in version control and
+    # the three values below identify the OAuth client that the signing key belongs to.
+    [string] $ClientId   = $env:SF_CLIENT_ID,
+    [string] $CompanyId  = $env:SF_COMPANY_ID,
+    [string] $UserId     = $env:SF_USER_ID,
     [string] $FromUserId = '40000000',
     [string] $ToUserId   = '40009999',
     [string] $OutFile    = 'sap-users.json',

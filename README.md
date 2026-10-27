@@ -283,6 +283,12 @@ second step to be a different actor.
 anything saved is still recorded against their own account, so the audit trail names the
 person and never the costume. A banner stays on screen while a role is assumed.
 
+> **Read [SECURITY.md](SECURITY.md) before this handles real pay.** Credentials are kept
+> off the browser, passwords are never stored and sign-in is throttled — but the session and
+> all state live in `localStorage`, so anyone with devtools can make themselves Super Admin
+> and edit anything, the audit log included. Every control here is a guard rail against
+> mistakes, not a defence against a determined person. That needs a backend.
+
 ### Signing in
 
 Staff sign in with their **SuccessFactors password**. The server posts it to the tenant

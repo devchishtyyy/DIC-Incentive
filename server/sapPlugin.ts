@@ -17,6 +17,7 @@
 
 import https from 'node:https'
 import type { Connect, Plugin } from 'vite'
+import { LoginThrottle, throttleKeys } from './loginThrottle'
 import { verifyCredentials } from './sapAuth'
 import {
   credentialsAreComplete,
@@ -53,6 +54,9 @@ export function sapApiPlugin(options: SapPluginOptions): Plugin {
   // One sync at a time. Opening the app in three tabs should cost one round of OAuth,
   // not three — they all wait on the same promise.
   let inFlight: Promise<unknown[]> | null = null
+
+  // Guards both the app and the SAP accounts behind it. See loginThrottle.ts.
+  const throttle = new LoginThrottle()
 
   return {
     name: 'dic-sap-api',
@@ -111,9 +115,31 @@ export function sapApiPlugin(options: SapPluginOptions): Plugin {
           return
         }
 
-        const result = await verifyCredentials(parsed.username ?? '', parsed.password ?? '', credentials.apiServer, agent)
+        const username = parsed.username ?? ''
+        const keys = throttleKeys(username, request.socket?.remoteAddress)
+
+        /*
+         * Refuse before SAP is ever called. That is the point: it stops a guessing attack
+         * reaching the tenant and tripping the real account's lockout policy, which would
+         * leave somebody unable to sign in to SuccessFactors itself.
+         */
+        throttle.prune()
+        const verdict = throttle.check(keys)
+        if (!verdict.allowed) {
+          // eslint-disable-next-line no-console
+          console.warn(`  Sign-in throttled for ${keys.join(' ')} — ${verdict.retryAfterSeconds}s remaining`)
+          response.setHeader('Retry-After', String(verdict.retryAfterSeconds))
+          send(response, 429, { ok: false, outcome: 'rejected', message: verdict.message })
+          return
+        }
+
+        const result = await verifyCredentials(username, parsed.password ?? '', credentials.apiServer, agent)
 
         if (result.outcome !== 'ok') {
+          // Only a wrong credential counts against the budget. A tenant that is down, or a
+          // network that is broken, must not lock somebody out of their own account.
+          if (result.outcome === 'rejected') throttle.recordFailure(keys)
+
           // eslint-disable-next-line no-console
           console.log(`  Sign-in ${result.outcome} for ${result.username || '(no username)'}`)
           send(response, result.outcome === 'rejected' ? 401 : 502, {
@@ -124,6 +150,7 @@ export function sapApiPlugin(options: SapPluginOptions): Plugin {
           return
         }
 
+        throttle.recordSuccess(keys)
         send(response, 200, { ok: true, username: result.username })
       })
 

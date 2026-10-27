@@ -190,8 +190,9 @@ describe('the login screen', () => {
     expect(render()).not.toContain('role="alert"')
   })
 
-  it('never renders a password into the markup', () => {
-    expect(render()).not.toContain('Pkgs@')
+  it('renders no password value into the markup', () => {
+    // The field starts empty and React never reflects a typed value into static HTML.
+    expect(render()).not.toMatch(/type="password"[^>]*value="[^"]/)
   })
 })
 
