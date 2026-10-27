@@ -29,21 +29,27 @@ export type Capability =
   | 'employee.approveAdd'
   | 'audit.view'
 
-/** Rows of the published matrix, verbatim. HOD grants marked in HOD_OWN_AREA are area-scoped. */
+/**
+ * Who may do what.
+ *
+ * The first five columns are the roles DIC runs on; the rest are the policy's original six
+ * plus the System Admin, kept so a stored account on one still resolves. Changing a cell
+ * here changes the whole app — no component checks a role name of its own.
+ */
 export const PERMISSION_MATRIX: Record<Capability, Record<RoleId, Grant>> = {
-  'entry.edit': { OFFICE_EXEC: 'E', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
-  'target.edit': { OFFICE_EXEC: 'none', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'E' },
-  'override.fullMarks': { OFFICE_EXEC: 'none', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
-  'entry.view': { OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'V', MD_CEO: 'V', ADMIN: 'V' },
-  'scorecard.view': { OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'V', MD_CEO: 'V', ADMIN: 'V' },
-  'month.submit': { OFFICE_EXEC: 'E', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
-  'month.hodSign': { OFFICE_EXEC: 'none', HOD: 'A', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
-  'month.opsApprove': { OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'A', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
-  'month.reopen': { OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'A', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
-  export: { OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'E', EHS_REP: 'none', MD_CEO: 'V', ADMIN: 'V' },
-  'masterdata.manage': { OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'E' },
-  'employee.approveAdd': { OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
-  'audit.view': { OFFICE_EXEC: 'none', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'none', MD_CEO: 'V', ADMIN: 'V' },
+  'entry.edit': { DATA_ENTRY: 'E', TARGET_SET: 'none', REVIEW_APPROVE: 'E', VIEWER: 'none', SUPER_ADMIN: 'E', OFFICE_EXEC: 'E', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
+  'target.edit': { DATA_ENTRY: 'none', TARGET_SET: 'E', REVIEW_APPROVE: 'none', VIEWER: 'none', SUPER_ADMIN: 'E', OFFICE_EXEC: 'none', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'E' },
+  'override.fullMarks': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'E', VIEWER: 'none', SUPER_ADMIN: 'E', OFFICE_EXEC: 'none', HOD: 'E', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
+  'entry.view': { DATA_ENTRY: 'V', TARGET_SET: 'V', REVIEW_APPROVE: 'V', VIEWER: 'V', SUPER_ADMIN: 'V', OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'V', MD_CEO: 'V', ADMIN: 'V' },
+  'scorecard.view': { DATA_ENTRY: 'V', TARGET_SET: 'V', REVIEW_APPROVE: 'V', VIEWER: 'V', SUPER_ADMIN: 'V', OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'V', MD_CEO: 'V', ADMIN: 'V' },
+  'month.submit': { DATA_ENTRY: 'E', TARGET_SET: 'none', REVIEW_APPROVE: 'none', VIEWER: 'none', SUPER_ADMIN: 'E', OFFICE_EXEC: 'E', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
+  'month.hodSign': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'A', VIEWER: 'none', SUPER_ADMIN: 'A', OFFICE_EXEC: 'none', HOD: 'A', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
+  'month.opsApprove': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'A', VIEWER: 'none', SUPER_ADMIN: 'A', OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'A', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'none' },
+  'month.reopen': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'A', VIEWER: 'none', SUPER_ADMIN: 'A', OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'A', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
+  export: { DATA_ENTRY: 'V', TARGET_SET: 'V', REVIEW_APPROVE: 'V', VIEWER: 'E', SUPER_ADMIN: 'E', OFFICE_EXEC: 'V', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'E', EHS_REP: 'none', MD_CEO: 'V', ADMIN: 'V' },
+  'masterdata.manage': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'none', VIEWER: 'none', SUPER_ADMIN: 'E', OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'none', ADMIN: 'E' },
+  'employee.approveAdd': { DATA_ENTRY: 'none', TARGET_SET: 'none', REVIEW_APPROVE: 'A', VIEWER: 'none', SUPER_ADMIN: 'A', OFFICE_EXEC: 'none', HOD: 'none', OPS_MANAGER: 'none', FINANCE: 'none', EHS_REP: 'none', MD_CEO: 'A', ADMIN: 'none' },
+  'audit.view': { DATA_ENTRY: 'none', TARGET_SET: 'V', REVIEW_APPROVE: 'V', VIEWER: 'V', SUPER_ADMIN: 'V', OFFICE_EXEC: 'none', HOD: 'V', OPS_MANAGER: 'V', FINANCE: 'V', EHS_REP: 'none', MD_CEO: 'V', ADMIN: 'V' },
 }
 
 export type Action =
@@ -111,7 +117,7 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
     case 'entry.acknowledgeWarning':
     case 'day.submit': {
       const grant = grantFor(role, 'entry.edit')
-      if (grant !== 'E') return deny(`Only the Office Executive and the HOD may enter Output Batches. ${ROLE_SHORT[role]} has view-only access.`)
+      if (grant !== 'E') return deny(`Output Batches are entered by Data Entry. ${ROLE_SHORT[role]} has view-only access.`)
 
       if (resource.entryStatus === 'Locked') return deny('This row is locked because the period has been approved.')
 
@@ -121,9 +127,11 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
         case 'HOD Signed':
           return deny('The period has been signed off by all HODs and is waiting for Operations Manager approval.')
         case 'Submitted':
-          return role === 'HOD'
+          // Once it is with the reviewer, only the reviewer may touch it. Letting the
+          // person who submitted it keep editing would make the hand-off meaningless.
+          return grantFor(role, 'month.hodSign') === 'A'
             ? ALLOW
-            : deny('The month is Submitted. Only the HOD may change a row now, to fix an error.')
+            : deny('The month is Submitted. Only Review and Approval may change a row now, to fix an error.')
         default:
           return ALLOW
       }
@@ -138,15 +146,14 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
 
     // --- Targets ----------------------------------------------------------
     case 'target.editDated': {
-      if (role === 'ADMIN') return deny('The Admin maintains default targets on the Master Data screen. Only the HOD may change the target for a date.')
-      if (grantFor(role, 'target.edit') !== 'E') return deny('Only the HOD may change a Daily Target, and only with a reason (policy section 5).')
+      if (grantFor(role, 'target.edit') !== 'E') return deny(`Daily Targets are set by Target Setting. ${ROLE_SHORT[role]} can see them but not change them.`)
       if (resource.periodStatus === 'Locked') return deny('The period is Locked. Reopen it before changing a target.')
       if (resource.periodStatus === 'HOD Signed') return deny('The period is signed off and waiting for Operations Manager approval.')
       return ALLOW
     }
 
     case 'target.editDefault':
-      return role === 'ADMIN' || role === 'HOD' ? ALLOW : deny('Default targets are maintained by the Admin or the HOD.')
+      return grantFor(role, 'target.edit') === 'E' ? ALLOW : deny(`Default targets are set by Target Setting. ${ROLE_SHORT[role]} cannot change them.`)
 
     // --- Full-marks override (policy section 10) ---------------------------
     case 'override.grant': {
@@ -212,7 +219,7 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
 
     case 'export.download': {
       if (grantFor(role, 'export') !== 'E') {
-        return deny(`The permission matrix gives Export (E) to Finance. ${ROLE_SHORT[role]} can view the preview but not download the file.`)
+        return deny(`Downloading the file is a Viewer's job. ${ROLE_SHORT[role]} can read the preview here.`)
       }
       if (resource.periodStatus !== 'Locked') return deny('Only an approved and locked period can be exported to Finance.')
       return ALLOW
@@ -221,7 +228,7 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
     // --- Master data and admin --------------------------------------------
     case 'masterdata.manage':
       return grantFor(role, 'masterdata.manage') !== 'E'
-        ? deny('Master data — employees, points, areas, users and the calendar — is maintained by the System Admin.')
+        ? deny('Master data — employees, points, departments, users and the calendar — is maintained by the Super Admin.')
         : ALLOW
 
     /*
@@ -254,7 +261,9 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
      * touches them. Not even the Admin: they maintain master data, and this is money.
      */
     case 'rates.edit':
-      return role === 'MD_CEO' ? ALLOW : deny('Only the MD can change pay rates or grade bands.')
+      return grantFor(role, 'employee.approveAdd') === 'A' || role === 'SUPER_ADMIN'
+        ? ALLOW
+        : deny('Pay rates and grade bands are changed by Review and Approval.')
 
     case 'periodMarks.edit': {
       if (grantFor(role, 'entry.edit') !== 'E') return deny(`${ROLE_SHORT[role]} does not enter period marks.`)
@@ -278,7 +287,7 @@ export function can(role: RoleId, action: Action, resource: Resource = {}): Deci
       return ALLOW
 
     case 'settings.edit':
-      return role === 'ADMIN' ? ALLOW : deny('Settings are maintained by the System Admin. Every role can read them.')
+      return grantFor(role, 'masterdata.manage') === 'E' ? ALLOW : deny('Settings are maintained by the Super Admin. Every role can read them.')
 
     default:
       return deny('Unknown action.')
@@ -309,4 +318,27 @@ export function canSeeScreen(role: RoleId, screen: string): boolean {
     default:
       return false
   }
+}
+
+/**
+ * The same check, for somebody who holds more than one job.
+ *
+ * Allowed when any role allows. When none does, the reason returned is the one from their
+ * *most* capable role rather than the first in the list — telling a target setter who also
+ * reviews that "Viewer has no access" would send them looking for the wrong problem.
+ */
+export function canAny(roles: readonly RoleId[], action: Action, resource: Resource = {}): Decision {
+  if (roles.length === 0) return deny('This account has no role, so it can do nothing. The Super Admin assigns one.')
+
+  const decisions = roles.map((role) => can(role, action, resource))
+  const allowed = decisions.find((decision) => decision.allowed)
+  if (allowed) return allowed
+
+  // The longest reason is, in practice, the most specific one.
+  return decisions.reduce((best, current) => (current.reason.length > best.reason.length ? current : best))
+}
+
+/** A screen is visible when any of their roles can see it. */
+export function canSeeScreenAny(roles: readonly RoleId[], screen: string): boolean {
+  return roles.some((role) => canSeeScreen(role, screen))
 }

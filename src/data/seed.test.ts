@@ -9,6 +9,8 @@ import { calcEmployeeDay, entryPercent, entryScore, round } from '../domain/calc
 import { deadlineForPeriod } from '../domain/dates'
 import { monthChecklist, periodHealth, periodWorkingDays, scorecard, selectEntries } from '../store/selectors'
 import { hodHasSigned } from '../store/writes'
+import { ACTIVE_ROLES } from '../domain/types'
+import { USERS } from './masters'
 import { buildSeedState, MAIN_PERIOD_ID, OPEN_PERIOD_ID, SCENARIOS } from './seed'
 
 const state = buildSeedState()
@@ -47,13 +49,20 @@ describe('the seed copies the shape of the real Excel', () => {
     expect(rows.length).toBeLessThan(900)
   })
 
-  it('has at least one user per role, one HOD and two Office Executives', () => {
-    const byRole = (role: string) => state.users.filter((u) => u.role === role)
-    expect(byRole('OFFICE_EXEC')).toHaveLength(2)
-    expect(byRole('HOD')).toHaveLength(1)
-    for (const role of ['OPS_MANAGER', 'FINANCE', 'EHS_REP', 'MD_CEO', 'ADMIN']) {
-      expect(byRole(role).length).toBeGreaterThanOrEqual(1)
+  it('has a user for every role in use, and two on Data Entry', () => {
+    for (const role of ACTIVE_ROLES) {
+      expect(USERS.some((user) => user.roles.includes(role)), role).toBe(true)
     }
+    expect(USERS.filter((user) => user.roles.includes('DATA_ENTRY'))).toHaveLength(2)
+  })
+
+  it('gives everybody a SAP username to sign in with', () => {
+    expect(USERS.every((user) => Boolean(user.sapUsername))).toBe(true)
+  })
+
+  it('links each sign-in to exactly one account', () => {
+    const names = USERS.map((user) => user.sapUsername)
+    expect(new Set(names).size).toBe(names.length)
   })
 
   it('never produces a score above the cap anywhere in the data', () => {
@@ -166,7 +175,7 @@ describe('seeded scenario 8 — a HOD target change on a stock-taking day', () =
     const rules = state.targetRules.filter((rule) => rule.effectiveFrom === '2026-08-25')
     expect(rules.length).toBe(3)
     expect(rules.every((rule) => rule.reason === 'Stock-taking day')).toBe(true)
-    expect(rules.every((rule) => rule.changedBy === 'U-HOD')).toBe(true)
+    expect(rules.every((rule) => rule.changedBy === 'U-40009560')).toBe(true)
   })
 
   it('writes the reason to the audit log', () => {

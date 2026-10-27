@@ -1,6 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
-import { canSeeScreen } from './domain/permissions'
+import { canSeeScreenAny } from './domain/permissions'
 import { ROLE_LABELS } from './domain/types'
 import { AppProvider, useApp } from './store/AppStore'
 import { EmptyState, PageHeader } from './components/ui'
@@ -21,13 +21,13 @@ import Login from './screens/Login'
 /** A screen the role cannot open is replaced with the reason, not a blank page. */
 function Screen({ name, children }: { name: string; children: React.ReactNode }) {
   const { user } = useApp()
-  if (canSeeScreen(user.role, name)) return <>{children}</>
+  if (canSeeScreenAny(user.roles, name)) return <>{children}</>
   return (
     <>
       <PageHeader title="No access" />
       <div className="card">
         <EmptyState
-          title={`${ROLE_LABELS[user.role]} has no access to this screen`}
+          title={`${user.roles.map((role) => ROLE_LABELS[role]).join(' / ')} has no access to this screen`}
           body="Switch account from the menu in the top right to test another role."
         />
       </div>

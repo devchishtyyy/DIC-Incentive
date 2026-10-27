@@ -255,6 +255,34 @@ Settings → **Weekly roster sync** shows the schedule, last result and next run
 **Sync now** button. A sync that returns fewer than half the people already on file is
 refused as a likely fault rather than applied, and a failure backs off for an hour.
 
+### Who does what
+
+DIC named four jobs plus a super admin. They cut across the policy's original six roles
+rather than matching them, so those are kept in the backend — a stored account on one
+still resolves — but nothing in the flow depends on them.
+
+| Role | Does | Who |
+|---|---|---|
+| **Data Entry** | Daily Output Batches, period marks, attendance, submits the day and the month | Ambreen Nazir, Rehmat Ali Khan |
+| **Target Setting** | Default Daily Targets and dated changes | Muhammad Waqar, Muhammad Fozan Shoaib |
+| **Review and Approval** | Signs off, approves and locks, reopens, approves people and pay rates | Muhammad Waqar, Muhammad Salman Bari |
+| **Viewer** | Reads the scorecard, downloads an approved export | Muhammad Hassaan Shoukat |
+| **Super Admin** | Everything, and can view as any other role | 10009671 |
+
+**Roles are a list, not a single value.** Muhammad Waqar sets the targets *and* sits on
+review and approval — which also means the targets a month is scored against can be
+approved by the person who set them. Worth knowing; the app does not prevent it.
+
+The Operations Manager's approval and the MD's sign-offs are now both **Review and
+Approval**, and Finance's export is a **Viewer's**. Two people hold Review and Approval, so
+the submit → sign → approve sequence still has two signatures in it — but either of them
+can take either step, so one person could do both. Say the word and I will require the
+second step to be a different actor.
+
+**Super Admin can view as any role** from the account menu. Only the permission changes:
+anything saved is still recorded against their own account, so the audit trail names the
+person and never the costume. A banner stays on screen while a role is assumed.
+
 ### Signing in
 
 Staff sign in with their **SuccessFactors password**. The server posts it to the tenant

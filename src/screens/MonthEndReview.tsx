@@ -282,7 +282,7 @@ export default function MonthEndReview() {
             </div>
 
             <p className="mt-3 text-[11px] text-ink-500">
-              Disabled buttons explain why on hover. Signed in as {ROLE_SHORT[user.role]}.
+              Disabled buttons explain why on hover. Signed in as {user.roles.map((role) => ROLE_SHORT[role]).join(' · ')}.
             </p>
           </section>
 

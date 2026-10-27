@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { can } from './permissions'
 
-describe('acceptance test 7 — Office Executive tries to edit a target', () => {
+describe('acceptance test 7 — Data Entry tries to edit a target', () => {
   it('is denied, with a reason for the tooltip', () => {
     const decision = can('OFFICE_EXEC', 'target.editDated', { periodStatus: 'Open', })
     expect(decision.allowed).toBe(false)
-    expect(decision.reason).toMatch(/Only the HOD/)
+    expect(decision.reason).toMatch(/Target Setting/)
   })
 
   it('still lets the Office Executive enter actual batches', () => {
@@ -94,7 +94,7 @@ describe('the month-end sequence cannot be skipped', () => {
     ).toBe(false)
   })
 
-  it('lets the HOD fix a row while the month is Submitted, but not the Office Executive', () => {
+  it('lets Review and Approval fix a row while the month is Submitted, but not Data Entry', () => {
     const resource = { periodStatus: 'Submitted' as const }
     expect(can('HOD', 'entry.edit', resource).allowed).toBe(true)
     expect(can('OFFICE_EXEC', 'entry.edit', resource).allowed).toBe(false)

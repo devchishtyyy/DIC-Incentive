@@ -7,8 +7,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { canSeeScreen } from '../domain/permissions'
-import { ROLE_LABELS } from '../domain/types'
+import { canSeeScreenAny } from '../domain/permissions'
+import { ACTIVE_ROLES, ROLE_LABELS, type RoleId } from '../domain/types'
 import { useApp } from '../store/AppStore'
 import { Icon, PeriodBadge, Toaster } from './ui'
 
@@ -50,12 +50,12 @@ const NAV_GROUPS: Array<{ title: string; items: NavItem[] }> = [
 ]
 
 export default function Layout() {
-  const { state, user, period, setPeriodId } = useApp()
+  const { state, roles, period, setPeriodId } = useApp()
   const location = useLocation()
 
   const groups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => canSeeScreen(user.role, item.screen)),
+    items: group.items.filter((item) => canSeeScreenAny(roles, item.screen)),
   })).filter((group) => group.items.length > 0)
 
   const flat = groups.flatMap((group) => group.items)
@@ -88,6 +88,8 @@ export default function Layout() {
           <UserMenu />
         </div>
       </header>
+
+      <ActingBanner />
 
       <div className="flex">
         {/* --- Sidebar ----------------------------------------------------- */}
@@ -141,7 +143,7 @@ export default function Layout() {
 // ---------------------------------------------------------------------------
 
 function UserMenu() {
-  const { user, signOut, loadDemoData, storageWarning } = useApp()
+  const { user, signOut, loadDemoData, storageWarning, canAssumeRoles, actingRole, setActingRole } = useApp()
   const [open, setOpen] = useState(false)
   const wrapper = useRef<HTMLDivElement>(null)
 
@@ -185,10 +187,32 @@ function UserMenu() {
         <div role="menu" className="card absolute right-0 z-50 mt-1.5 w-64 overflow-hidden p-1 shadow-lg">
           <div className="border-b border-ink-200 px-3 py-2">
             <p className="text-sm font-medium text-ink-900">{user.name}</p>
-            <p className="text-xs text-ink-500">{ROLE_LABELS[user.role]}</p>
+            <p className="text-xs text-ink-500">{user.roles.map((role) => ROLE_LABELS[role]).join(' · ')}</p>
           </div>
 
           {storageWarning && <p className="border-b border-ink-200 px-3 py-2 text-xs text-warn-700">{storageWarning}</p>}
+
+          {canAssumeRoles && (
+            <div className="border-b border-ink-200 px-3 py-2">
+              <label className="label" htmlFor="acting-role">
+                View as
+              </label>
+              <select
+                id="acting-role"
+                className="input mt-1 py-1.5 text-sm"
+                value={actingRole ?? ''}
+                onChange={(event) => setActingRole((event.target.value || null) as RoleId | null)}
+              >
+                <option value="">Super Admin (everything)</option>
+                {ACTIVE_ROLES.filter((role) => role !== 'SUPER_ADMIN').map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-ink-500">Changes what you can do. Anything you save is still recorded as you.</p>
+            </div>
+          )}
 
           <button
             type="button"
@@ -215,6 +239,28 @@ function UserMenu() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+
+/**
+ * A standing reminder that what you can see is not what you are.
+ *
+ * Without it, a Super Admin who left themselves in Viewer would spend ten minutes
+ * wondering why every button is disabled.
+ */
+function ActingBanner() {
+  const { canAssumeRoles, actingRole, setActingRole } = useApp()
+  if (!canAssumeRoles || !actingRole) return null
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2 bg-warn-50 px-4 py-1.5 text-xs text-warn-700">
+      <Icon name="alert" className="h-3.5 w-3.5" />
+      Viewing as <strong>{ROLE_LABELS[actingRole]}</strong> — your own permissions are paused.
+      <button type="button" className="font-semibold underline underline-offset-2" onClick={() => setActingRole(null)}>
+        Back to Super Admin
+      </button>
     </div>
   )
 }

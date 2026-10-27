@@ -860,11 +860,13 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
     case 'user.upsert': {
       const previous = state.users.find((u) => u.userId === op.user.userId)
       if (op.isNew || !previous) {
-        audit('User', op.user.userId, 'User created', '', `${op.user.name} · ${op.user.role}`)
+        audit('User', op.user.userId, 'User created', '', `${op.user.name} · ${op.user.roles.join(', ')}`)
         return { state: { ...state, users: [...state.users, op.user] }, logs, message: `${op.user.name} added.` }
       }
-      for (const field of ['name', 'role'] as const) {
-        if (str(previous[field]) !== str(op.user[field])) audit('User', op.user.userId, field, previous[field], op.user[field])
+      if (previous.name !== op.user.name) audit('User', op.user.userId, 'name', previous.name, op.user.name)
+      // Roles decide what somebody can do, so a change of them is worth reading as a list.
+      if (previous.roles.join(',') !== op.user.roles.join(',')) {
+        audit('User', op.user.userId, 'roles', previous.roles.join(', '), op.user.roles.join(', '))
       }
       return { state: { ...state, users: state.users.map((u) => (u.userId === op.user.userId ? op.user : u)) }, logs, message: `${op.user.name} updated.` }
     }

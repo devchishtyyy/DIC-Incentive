@@ -7,7 +7,8 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { can, type Action, type Resource } from '../domain/permissions'
+import { canAny, type Action, type Resource } from '../domain/permissions'
+import type { RoleId } from '../domain/types'
 import type { AppState, MonthPeriod, User } from '../domain/types'
 import { buildBaseState, buildDemoState, DEFAULT_PERIOD_ID, generateEntriesForRoster, SCHEMA_VERSION } from '../data/seed'
 import { applyWrite, type WriteOp } from './writes'
@@ -17,9 +18,11 @@ const STATE_KEY = 'dic-incentive.state.v1'
 const SESSION_KEY = 'dic-incentive.session.v1'
 
 interface Session {
-  /** Null until someone picks a test account on the login screen. */
+  /** Null until somebody signs in. */
   userId: string | null
   periodId: string
+  /** A role the Super Admin is looking through. Null means their own. */
+  actingRole?: RoleId | null
 }
 
 export interface Toast {
@@ -41,6 +44,12 @@ interface AppContextValue {
   signIn: (userId: string) => void
   signOut: () => void
   setPeriodId: (periodId: string) => void
+  /** Every role in force right now — their own, or the single one being assumed. */
+  roles: RoleId[]
+  /** True when this account may look through another role. */
+  canAssumeRoles: boolean
+  actingRole: RoleId | null
+  setActingRole: (role: RoleId | null) => void
 
   write: (op: WriteOp) => void
   /** Back to master data only — no employees, no entries. */
@@ -52,8 +61,8 @@ interface AppContextValue {
   /** The weekly SAP roster sync — its live status and a manual trigger. */
   rosterSync: SyncRunner
 
-  /** `can(...)` with the current user's role and area filled in. */
-  allow: (action: Action, resource?: Resource) => ReturnType<typeof can>
+  /** `canAny(...)` with the roles in force and the period status filled in. */
+  allow: (action: Action, resource?: Resource) => ReturnType<typeof canAny>
 
   toasts: Toast[]
   pushToast: (kind: Toast['kind'], message: string) => void
@@ -93,7 +102,7 @@ function loadState(): { state: AppState; warning: string | null } {
 }
 
 function loadSession(seed: AppState): Session {
-  const fallback: Session = { userId: null, periodId: livePeriodId(seed) }
+  const fallback: Session = { userId: null, periodId: livePeriodId(seed), actingRole: null }
   try {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) return fallback
@@ -212,10 +221,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     pushToast('success', 'Demo entries generated for the current roster.')
   }, [session.userId, pushToast])
 
+  /**
+   * The Super Admin can look through any role, which is how one person tests that the
+   * Viewer really cannot approve a month without keeping six passwords.
+   *
+   * Only the *permission* changes: writes stay stamped with their real user id, so the
+   * audit trail names the person and never the costume.
+   */
+  const canAssumeRoles = user.roles.includes('SUPER_ADMIN')
+  const actingRole = canAssumeRoles ? (session.actingRole ?? null) : null
+  const roles = useMemo<RoleId[]>(() => (actingRole ? [actingRole] : user.roles), [actingRole, user.roles])
+
   const allow = useCallback(
-    (action: Action, resource: Resource = {}) =>
-      can(user.role, action, { periodStatus: period.status, ...resource }),
-    [user, period.status],
+    (action: Action, resource: Resource = {}) => canAny(roles, action, { periodStatus: period.status, ...resource }),
+    [roles, period.status],
   )
 
   /*
@@ -241,9 +260,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       period,
       today,
       storageWarning,
-      signIn: (userId) => setSession((s) => ({ ...s, userId, periodId: livePeriodId(state) })),
-      signOut: () => setSession((s) => ({ ...s, userId: null })),
+      signIn: (userId) => setSession((s) => ({ ...s, userId, periodId: livePeriodId(state), actingRole: null })),
+      signOut: () => setSession((s) => ({ ...s, userId: null, actingRole: null })),
       setPeriodId: (periodId) => setSession((s) => ({ ...s, periodId })),
+      roles,
+      canAssumeRoles,
+      actingRole,
+      setActingRole: (role) => setSession((s) => ({ ...s, actingRole: role })),
       write,
       resetToEmpty,
       loadDemoData,
@@ -254,7 +277,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pushToast,
       dismissToast,
     }),
-    [state, signedIn, user, period, storageWarning, write, resetToEmpty, loadDemoData, generateDemoEntries, rosterSync, allow, toasts, pushToast, dismissToast],
+    [state, signedIn, user, period, roles, canAssumeRoles, actingRole, storageWarning, write, resetToEmpty, loadDemoData, generateDemoEntries, rosterSync, allow, toasts, pushToast, dismissToast],
   )
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

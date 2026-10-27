@@ -15,7 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { formatDate, formatWeekday } from '../domain/dates'
 import type { AppState, Department, Employee, Point, User } from '../domain/types'
-import { ROLE_LABELS, type RoleId } from '../domain/types'
+import { ACTIVE_ROLES, ROLE_LABELS } from '../domain/types'
 import { GRADES } from '../data/masters'
 import { useApp } from '../store/AppStore'
 import { displayName, periodWorkingDays } from '../store/selectors'
@@ -952,7 +952,7 @@ function UsersTab() {
           decision={decision}
           variant="primary"
           onClick={() =>
-            setEditing({ user: { userId: `U-NEW-${Date.now().toString(36).toUpperCase()}`, name: '', role: 'OFFICE_EXEC' }, isNew: true })
+            setEditing({ user: { userId: `U-NEW-${Date.now().toString(36).toUpperCase()}`, name: '', roles: ['DATA_ENTRY'] }, isNew: true })
           }
         >
           <Icon name="plus" className="h-3.5 w-3.5" /> Add user
@@ -979,7 +979,7 @@ function UsersTab() {
             {state.users.map((user) => (
               <tr key={user.userId}>
                 <td className="td font-medium">{user.name}</td>
-                <td className="td text-ink-600">{ROLE_LABELS[user.role]}</td>
+                <td className="td text-ink-600">{user.roles.map((role) => ROLE_LABELS[role]).join(' · ')}</td>
                 <td className="td">
                   <SapUsernameCell user={user} />
                 </td>
@@ -1039,14 +1039,36 @@ function UserDialog({ user, isNew, onClose, onSave }: { user: User; isNew: boole
         <Field label="Name">
           <input className="input" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
         </Field>
-        <Field label="Role">
-          <select className="input" value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value as RoleId })}>
-            {(Object.keys(ROLE_LABELS) as RoleId[]).map((role) => (
-              <option key={role} value={role}>
+        <Field label="Roles" hint="A permission is granted when any of their roles grants it. At least one person here does two jobs.">
+          <div className="space-y-1.5">
+            {ACTIVE_ROLES.map((role) => (
+              <label key={role} className="flex items-center gap-2 text-sm text-ink-800">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={draft.roles.includes(role)}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      roles: event.target.checked ? [...draft.roles, role] : draft.roles.filter((held) => held !== role),
+                    })
+                  }
+                />
                 {ROLE_LABELS[role]}
-              </option>
+              </label>
             ))}
-          </select>
+            {draft.roles.filter((role) => !ACTIVE_ROLES.includes(role)).map((role) => (
+              <label key={role} className="flex items-center gap-2 text-sm text-ink-500">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked
+                  onChange={() => setDraft({ ...draft, roles: draft.roles.filter((held) => held !== role) })}
+                />
+                {ROLE_LABELS[role]} <span className="text-xs text-ink-400">· retired role</span>
+              </label>
+            ))}
+          </div>
         </Field>
       </div>
     </Modal>

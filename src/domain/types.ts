@@ -17,8 +17,22 @@ export type IsoDateTime = string // YYYY-MM-DDTHH:mm:ss.sssZ
 // Roles
 // ---------------------------------------------------------------------------
 
-/** Six policy roles (section 4) plus System Admin, which exists only for the app. */
+/**
+ * The roles the app actually runs on.
+ *
+ * DIC named four jobs plus a super admin, and they cut across the policy's six roles rather
+ * than matching them: approval and the MD's sign-offs are one job now, and Finance's export
+ * is a Viewer's. The policy roles below still exist and still work — a stored account on one
+ * keeps its permissions — but nothing in the flow depends on them any more.
+ */
 export type RoleId =
+  // --- In use ---
+  | 'DATA_ENTRY'
+  | 'TARGET_SET'
+  | 'REVIEW_APPROVE'
+  | 'VIEWER'
+  | 'SUPER_ADMIN'
+  // --- Kept so stored accounts and the published matrix still resolve ---
   | 'OFFICE_EXEC'
   | 'HOD'
   | 'OPS_MANAGER'
@@ -27,7 +41,17 @@ export type RoleId =
   | 'MD_CEO'
   | 'ADMIN'
 
+/** The roles offered when assigning somebody a job. The legacy ones are not. */
+export const ACTIVE_ROLES: RoleId[] = ['DATA_ENTRY', 'TARGET_SET', 'REVIEW_APPROVE', 'VIEWER', 'SUPER_ADMIN']
+
+export const LEGACY_ROLES: RoleId[] = ['OFFICE_EXEC', 'HOD', 'OPS_MANAGER', 'FINANCE', 'EHS_REP', 'MD_CEO', 'ADMIN']
+
 export const ROLE_LABELS: Record<RoleId, string> = {
+  DATA_ENTRY: 'Data Entry',
+  TARGET_SET: 'Target Setting',
+  REVIEW_APPROVE: 'Review and Approval',
+  VIEWER: 'Viewer',
+  SUPER_ADMIN: 'Super Admin',
   OFFICE_EXEC: 'Office Executive',
   HOD: 'HOD (Department Head)',
   OPS_MANAGER: 'Operations Manager',
@@ -38,6 +62,11 @@ export const ROLE_LABELS: Record<RoleId, string> = {
 }
 
 export const ROLE_SHORT: Record<RoleId, string> = {
+  DATA_ENTRY: 'Data Entry',
+  TARGET_SET: 'Target Setting',
+  REVIEW_APPROVE: 'Review & Approval',
+  VIEWER: 'Viewer',
+  SUPER_ADMIN: 'Super Admin',
   OFFICE_EXEC: 'Office Exec',
   HOD: 'HOD',
   OPS_MANAGER: 'Ops Manager',
@@ -50,7 +79,14 @@ export const ROLE_SHORT: Record<RoleId, string> = {
 export interface User {
   userId: string
   name: string
-  role: RoleId
+  /**
+   * Every job this person does. A list, because at least one of them does two: the person
+   * who sets the targets also sits on review and approval, and squeezing that into a single
+   * role would mean either taking work away from them or giving them work they do not do.
+   *
+   * A permission is granted when *any* of their roles grants it.
+   */
+  roles: RoleId[]
   /**
    * The SuccessFactors username this account signs in with, without the `@packagesli`
    * suffix — usually their employee number.

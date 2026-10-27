@@ -79,7 +79,7 @@ export default function AuditLog() {
 
   const nameOf = (userId: string) => {
     const found = state.users.find((u) => u.userId === userId)
-    return found ? `${found.name} (${ROLE_SHORT[found.role]})` : userId
+    return found ? `${found.name} (${found.roles.map((role) => ROLE_SHORT[role]).join('/')})` : userId
   }
 
   return (

@@ -107,7 +107,7 @@ beforeEach(() => {
 describe('every screen renders for every role', () => {
   for (const user of USERS) {
     for (const [name, path] of SCREENS) {
-      it(`${user.role} — ${name}`, () => {
+      it(`${user.roles.join('+')} — ${name}`, () => {
         installStorage({ userId: user.userId, periodId: '2026-08' })
         const html = renderToStaticMarkup(<Tree path={path} />)
         expect(html).toContain('Production Incentive')
@@ -122,7 +122,7 @@ describe('every screen renders for every period', () => {
   for (const period of PERIODS) {
     for (const [name, path] of SCREENS) {
       it(`${period.periodId} (${period.status}) — ${name}`, () => {
-        installStorage({ userId: 'U-OE1', periodId: period.periodId })
+        installStorage({ userId: 'U-10009671', periodId: period.periodId })
         const html = renderToStaticMarkup(<Tree path={path} />)
         expect(html).toContain('Production Incentive')
         expectNoBrokenNumbers(html, name)
@@ -133,7 +133,7 @@ describe('every screen renders for every period', () => {
 
 describe('the HOD sees the whole plant', () => {
   it('has no Production Area filter left in the top bar', () => {
-    installStorage({ userId: 'U-HOD', periodId: '2026-08' })
+    installStorage({ userId: 'U-10009671', periodId: '2026-08' })
     const html = renderToStaticMarkup(<Tree path="/scorecard" />)
     expect(html).not.toContain('Production Area')
     expect(html).not.toContain('All areas')
@@ -142,7 +142,7 @@ describe('the HOD sees the whole plant', () => {
 
 describe('the login screen', () => {
   const render = () => {
-    installStorage({ userId: 'U-OE1', periodId: '2026-09' })
+    installStorage({ userId: 'U-40009525', periodId: '2026-09' })
     return renderToStaticMarkup(
       <AppProvider>
         <StaticRouter location="/">
@@ -156,25 +156,41 @@ describe('the login screen', () => {
     const html = render()
     expect(html).toContain('type="password"')
     expect(html).toContain('Employee number')
-    expect(html).toContain('Sign in with your SuccessFactors account')
   })
 
-  it('says the suffix is added for you, so nobody types it', () => {
-    expect(render()).toContain('@packagesli')
+  it('says only what somebody needs to know to sign in', () => {
+    expect(render()).toContain('Use the same credentials as SuccessFactors')
   })
 
-  it('promises not to keep the password, which it does not', () => {
-    expect(render()).toContain('not stored anywhere by this app')
-  })
-
-  it('still offers the test accounts, behind a disclosure', () => {
+  it('OFFERS NO WAY IN BUT THE PASSWORD', () => {
     const html = render()
-    expect(html).toContain('Sign in as a test account')
-    // Collapsed by default: the real sign-in is the one on offer.
+    // No demo door beside the real one.
+    expect(html).not.toContain('test account')
     expect(html).not.toContain('Daily work')
+    for (const user of USERS) expect(html, user.name).not.toContain(user.name)
   })
 
-  it('never renders a password value into the markup', () => {
+  it('labels both fields properly rather than leaning on placeholders', () => {
+    const html = render()
+    expect(html).toContain('for="login-username"')
+    expect(html).toContain('for="login-password"')
+  })
+
+  it('lets a password manager fill it in', () => {
+    const html = render().toLowerCase()
+    expect(html).toContain('autocomplete="username"')
+    expect(html).toContain('autocomplete="current-password"')
+  })
+
+  it('gives the password a labelled show/hide control', () => {
+    expect(render()).toContain('aria-label="Show password"')
+  })
+
+  it('opens with no error showing', () => {
+    expect(render()).not.toContain('role="alert"')
+  })
+
+  it('never renders a password into the markup', () => {
     expect(render()).not.toContain('Pkgs@')
   })
 })
@@ -183,7 +199,7 @@ describe('the app before any roster has been imported', () => {
   // This is what a new install looks like: master data only, no employees, no entries.
   for (const [name, path] of SCREENS) {
     it(`${name} renders empty without crashing`, () => {
-      installStorage({ userId: 'U-ADM', periodId: '2026-09' }, EMPTY_STATE)
+      installStorage({ userId: 'U-10009671', periodId: '2026-09' }, EMPTY_STATE)
       const html = renderToStaticMarkup(<Tree path={path} />)
       expect(html).toContain('Production Incentive')
       expectNoBrokenNumbers(html, name)
@@ -191,7 +207,7 @@ describe('the app before any roster has been imported', () => {
   }
 
   it('points the Admin at the SAP import rather than showing a blank table', () => {
-    installStorage({ userId: 'U-ADM', periodId: '2026-09' }, EMPTY_STATE)
+    installStorage({ userId: 'U-10009671', periodId: '2026-09' }, EMPTY_STATE)
     const html = renderToStaticMarkup(<Tree path="/people?tab=import" />)
     expect(html).toContain('Sync the directory from SAP')
   })

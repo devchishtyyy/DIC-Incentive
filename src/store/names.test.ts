@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import type { DailyEntry } from '../domain/types'
 import { buildBaseState } from '../data/seed'
 import { awaitingSapDetail, PLANT_ROSTER } from '../data/plantMasters'
-import { can } from '../domain/permissions'
+import { can, canAny } from '../domain/permissions'
 import { displayName, userForSapUsername } from './selectors'
 import { applyWrite } from './writes'
 
@@ -212,56 +212,114 @@ describe('who may type a name', () => {
 // ---------------------------------------------------------------------------
 
 describe('linking a SAP sign-in to an app account', () => {
-  const admin = { actorUserId: 'U-ADM', now: '2026-10-27T09:00:00.000Z' }
+  const admin = { actorUserId: 'U-10009671', now: '2026-10-27T09:00:00.000Z' }
   const base = buildBaseState()
 
-  it('nobody is linked until somebody links them', () => {
-    expect(base.users.every((user) => user.sapUsername === undefined)).toBe(true)
-    expect(userForSapUsername(base, '10001234@packagesli')).toBeNull()
-  })
-
-  it('resolves a verified username to its account', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
-    expect(userForSapUsername(linked, '10001234@packagesli')?.userId).toBe('U-HOD')
+  it('ships with every account linked to the username DIC gave', () => {
+    expect(base.users.every((user) => Boolean(user.sapUsername))).toBe(true)
+    expect(userForSapUsername(base, '40009525@packagesli')?.name).toBe('Ambreen Nazir')
   })
 
   it('matches with or without the suffix, and whatever the case', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
-    expect(userForSapUsername(linked, '10001234')?.userId).toBe('U-HOD')
-    expect(userForSapUsername(linked, '10001234@PACKAGESLI')?.userId).toBe('U-HOD')
+    expect(userForSapUsername(base, '40009525')?.name).toBe('Ambreen Nazir')
+    expect(userForSapUsername(base, '40009525@PACKAGESLI')?.name).toBe('Ambreen Nazir')
+  })
+
+  it('resolves the Super Admin', () => {
+    expect(userForSapUsername(base, '10009671')?.roles).toEqual(['SUPER_ADMIN'])
+  })
+
+  it('reaches nobody for a username that is not linked', () => {
+    expect(userForSapUsername(base, '99999999')).toBeNull()
   })
 
   it('strips a suffix somebody pasted in', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234@packagesli' }, admin).state
-    expect(linked.users.find((u) => u.userId === 'U-HOD')!.sapUsername).toBe('10001234')
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-40009559', sapUsername: '40001111@packagesli' }, admin).state
+    expect(linked.users.find((u) => u.userId === 'U-40009559')!.sapUsername).toBe('40001111')
   })
 
   it('REFUSES to link one sign-in to two accounts, which would make the role ambiguous', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
-    const clash = applyWrite(linked, { kind: 'user.setSapUsername', userId: 'U-ADM', sapUsername: '10001234' }, admin)
-
-    expect(clash.state).toBe(linked)
+    const clash = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-40009559', sapUsername: '40009525' }, admin)
+    expect(clash.state).toBe(base)
     expect(clash.message).toContain('already linked')
-    expect(userForSapUsername(clash.state, '10001234')?.userId).toBe('U-HOD')
+    expect(userForSapUsername(clash.state, '40009525')?.name).toBe('Ambreen Nazir')
   })
 
   it('audits the link, because it decides what somebody can do', () => {
-    const result = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin)
+    const result = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-40009559', sapUsername: '40001111' }, admin)
     expect(result.logs).toHaveLength(1)
     expect(result.logs[0].entity).toBe('User')
-    expect(result.logs[0].newValue).toBe('10001234')
+    expect(result.logs[0].newValue).toBe('40001111')
   })
 
   it('can be unlinked, and then that sign-in reaches nothing', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
-    const unlinked = applyWrite(linked, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '' }, admin).state
-    expect(userForSapUsername(unlinked, '10001234')).toBeNull()
+    const unlinked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-40009525', sapUsername: '' }, admin).state
+    expect(userForSapUsername(unlinked, '40009525')).toBeNull()
   })
 
   it('never resolves an empty username to somebody', () => {
-    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
-    expect(userForSapUsername(linked, '')).toBeNull()
-    expect(userForSapUsername(linked, '   ')).toBeNull()
-    expect(userForSapUsername(linked, '@packagesli')).toBeNull()
+    expect(userForSapUsername(base, '')).toBeNull()
+    expect(userForSapUsername(base, '   ')).toBeNull()
+    expect(userForSapUsername(base, '@packagesli')).toBeNull()
+  })
+})
+
+describe('the roles DIC named', () => {
+  const base = buildBaseState()
+  const roleOf = (sapUsername: string) => userForSapUsername(base, sapUsername)?.roles ?? []
+
+  it('puts 40009525 and 40007649 on Data Entry', () => {
+    expect(roleOf('40009525')).toEqual(['DATA_ENTRY'])
+    expect(roleOf('40007649')).toEqual(['DATA_ENTRY'])
+  })
+
+  it('puts 40009569 on Target Setting', () => {
+    expect(roleOf('40009569')).toEqual(['TARGET_SET'])
+  })
+
+  it('puts 40006991 on Review and Approval', () => {
+    expect(roleOf('40006991')).toEqual(['REVIEW_APPROVE'])
+  })
+
+  it('gives 40009560 BOTH jobs, because DIC listed them under both', () => {
+    expect(roleOf('40009560')).toEqual(['TARGET_SET', 'REVIEW_APPROVE'])
+  })
+
+  it('puts 40009559 on Viewer', () => {
+    expect(roleOf('40009559')).toEqual(['VIEWER'])
+  })
+
+  it('lets somebody with two roles do the work of either', () => {
+    const waqar = roleOf('40009560')
+    expect(canAny(waqar, 'target.editDated', { periodStatus: 'Open' }).allowed).toBe(true)
+    expect(canAny(waqar, 'month.hodSign', { periodStatus: 'Submitted' }).allowed).toBe(true)
+  })
+
+  it('keeps Data Entry out of targets and approval', () => {
+    const entry = roleOf('40009525')
+    expect(canAny(entry, 'entry.edit', { periodStatus: 'Open' }).allowed).toBe(true)
+    expect(canAny(entry, 'target.editDated', { periodStatus: 'Open' }).allowed).toBe(false)
+    expect(canAny(entry, 'month.opsApprove', { periodStatus: 'HOD Signed' }).allowed).toBe(false)
+  })
+
+  it('lets the Viewer download an approved export and change nothing', () => {
+    const viewer = roleOf('40009559')
+    expect(canAny(viewer, 'export.download', { periodStatus: 'Locked' }).allowed).toBe(true)
+    expect(canAny(viewer, 'entry.edit', { periodStatus: 'Open' }).allowed).toBe(false)
+    expect(canAny(viewer, 'month.opsApprove', { periodStatus: 'HOD Signed' }).allowed).toBe(false)
+  })
+
+  it('gives the Super Admin everything, at the point in the month each thing is allowed', () => {
+    const superAdmin = roleOf('10009671')
+    for (const action of ['entry.edit', 'target.editDated', 'masterdata.manage', 'rates.edit', 'month.submit'] as const) {
+      expect(canAny(superAdmin, action, { periodStatus: 'Open' }).allowed, action).toBe(true)
+    }
+    expect(canAny(superAdmin, 'month.hodSign', { periodStatus: 'Submitted' }).allowed).toBe(true)
+    expect(canAny(superAdmin, 'month.opsApprove', { periodStatus: 'HOD Signed' }).allowed).toBe(true)
+    expect(canAny(superAdmin, 'month.reopen', { periodStatus: 'Locked' }).allowed).toBe(true)
+  })
+
+  it('says something useful when an account has no role at all', () => {
+    expect(canAny([], 'entry.edit').reason).toContain('no role')
   })
 })

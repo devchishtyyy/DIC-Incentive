@@ -9,15 +9,22 @@
 import type { Department, Employee, Point, User } from '../domain/types'
 import { PLANT_POINTS, pointIdFor } from './plantMasters'
 
+/**
+ * The people who use the app, as DIC named them, with the SuccessFactors username each
+ * signs in with. Names came from the tenant; the jobs came from DIC.
+ *
+ * Muhammad Waqar holds two: he sets the Daily Targets *and* sits on review and approval.
+ * That is why `roles` is a list — and it is worth knowing, because it means the targets a
+ * month is scored against can be approved by the person who set them.
+ */
 export const USERS: User[] = [
-  { userId: 'U-OE1', name: 'Nadia Hussain', role: 'OFFICE_EXEC' },
-  { userId: 'U-OE2', name: 'Imran Qureshi', role: 'OFFICE_EXEC' },
-  { userId: 'U-HOD', name: 'Arif Mahmood', role: 'HOD' },
-  { userId: 'U-OPS', name: 'Rizwan Akhtar', role: 'OPS_MANAGER' },
-  { userId: 'U-FIN', name: 'Faisal Baig', role: 'FINANCE' },
-  { userId: 'U-EHS', name: 'Hira Zaman', role: 'EHS_REP' },
-  { userId: 'U-MD', name: 'Tariq Jameel', role: 'MD_CEO' },
-  { userId: 'U-ADM', name: 'Sana Mirza', role: 'ADMIN' },
+  { userId: 'U-40009525', name: 'Ambreen Nazir', sapUsername: '40009525', roles: ['DATA_ENTRY'] },
+  { userId: 'U-40007649', name: 'Rehmat Ali Khan', sapUsername: '40007649', roles: ['DATA_ENTRY'] },
+  { userId: 'U-40009560', name: 'Muhammad Waqar', sapUsername: '40009560', roles: ['TARGET_SET', 'REVIEW_APPROVE'] },
+  { userId: 'U-40009569', name: 'Muhammad Fozan Shoaib', sapUsername: '40009569', roles: ['TARGET_SET'] },
+  { userId: 'U-40006991', name: 'Muhammad Salman Bari', sapUsername: '40006991', roles: ['REVIEW_APPROVE'] },
+  { userId: 'U-40009559', name: 'Muhammad Hassaan Shoukat', sapUsername: '40009559', roles: ['VIEWER'] },
+  { userId: 'U-10009671', name: 'Super Admin', sapUsername: '10009671', roles: ['SUPER_ADMIN'] },
 ]
 
 /**

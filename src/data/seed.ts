@@ -33,7 +33,7 @@ import { DEMO_EMPLOYEES } from './demoRoster'
 import { createRng } from './rng'
 import { INITIAL_SYNC_STATE } from '../domain/syncSchedule'
 
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 const SEED = 20260817
 
 /** The four demo periods — one in each workflow state (seeded scenario 10). */
@@ -108,19 +108,19 @@ function buildTargetRules(points: Point[] = POINTS): TargetRule[] {
     effectiveTo: null,
     target: point.defaultTarget,
     reason: 'Default',
-    changedBy: 'U-ADM',
+    changedBy: 'U-10009671',
     changedAt: '2026-01-01T04:00:00.000Z',
   }))
 
   const dated: Array<Omit<TargetRule, 'ruleId'>> = [
     // Scenario 8 — stock-taking day across the wet end.
-    { pointId: 'PT-DISPERSION', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 2, reason: 'Stock-taking day', changedBy: 'U-HOD', changedAt: '2026-08-24T10:15:00.000Z' },
-    { pointId: 'PT-GRINDING', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 2, reason: 'Stock-taking day', changedBy: 'U-HOD', changedAt: '2026-08-24T10:16:00.000Z' },
-    { pointId: 'PT-FILTRATION', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 3, reason: 'Stock-taking day', changedBy: 'U-HOD', changedAt: '2026-08-24T10:17:00.000Z' },
+    { pointId: 'PT-DISPERSION', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 2, reason: 'Stock-taking day', changedBy: 'U-40009560', changedAt: '2026-08-24T10:15:00.000Z' },
+    { pointId: 'PT-GRINDING', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 2, reason: 'Stock-taking day', changedBy: 'U-40009560', changedAt: '2026-08-24T10:16:00.000Z' },
+    { pointId: 'PT-FILTRATION', effectiveFrom: '2026-08-25', effectiveTo: '2026-08-25', target: 3, reason: 'Stock-taking day', changedBy: 'U-40009560', changedAt: '2026-08-24T10:17:00.000Z' },
     // Machine downtime on the dispenser.
-    { pointId: 'PT-P48', effectiveFrom: '2026-09-03', effectiveTo: '2026-09-03', target: 5, reason: 'Machine downtime', changedBy: 'U-HOD', changedAt: '2026-09-03T05:40:00.000Z' },
+    { pointId: 'PT-P48', effectiveFrom: '2026-09-03', effectiveTo: '2026-09-03', target: 5, reason: 'Machine downtime', changedBy: 'U-40009560', changedAt: '2026-09-03T05:40:00.000Z' },
     // Order inflow lifts the UV line for three days in the open period.
-    { pointId: 'PT-UV-FILLING', effectiveFrom: '2026-09-22', effectiveTo: '2026-09-24', target: 8, reason: 'Order inflow', changedBy: 'U-HOD', changedAt: '2026-09-21T11:05:00.000Z' },
+    { pointId: 'PT-UV-FILLING', effectiveFrom: '2026-09-22', effectiveTo: '2026-09-24', target: 8, reason: 'Order inflow', changedBy: 'U-40009560', changedAt: '2026-09-21T11:05:00.000Z' },
   ]
 
   dated.forEach((rule, index) => {
@@ -230,7 +230,7 @@ function buildEntries(
     actualBatches: number | null,
   ): DailyEntry => {
     sequence += 1
-    const enteredBy = rng.chance(0.6) ? 'U-OE1' : 'U-OE2'
+    const enteredBy = rng.chance(0.6) ? 'U-40009525' : 'U-40007649'
     return {
       entryId: `EN-${String(sequence).padStart(5, '0')}`,
       periodId,
@@ -330,7 +330,7 @@ function applyScenarios(generated: DailyEntry[], startSequence: number): DailyEn
     overrideReason: null,
     acknowledgedWarnings: [],
     status: entryStatusFor(partial.periodId, partial.date),
-    enteredBy: 'U-OE1',
+    enteredBy: 'U-40009525',
     enteredAt: `${partial.date}T12:45:00.000Z`,
     updatedBy: null,
     updatedAt: null,
@@ -381,7 +381,7 @@ function applyScenarios(generated: DailyEntry[], startSequence: number): DailyEn
   if (overrideRow) {
     overrideRow.scoreOverride = 20
     overrideRow.overrideReason = 'Extraordinary performance — recovered a failed batch within the same shift'
-    overrideRow.updatedBy = 'U-HOD'
+    overrideRow.updatedBy = 'U-40009560'
     overrideRow.updatedAt = '2026-08-27T14:10:00.000Z'
   }
 
@@ -399,18 +399,18 @@ function applyScenarios(generated: DailyEntry[], startSequence: number): DailyEn
 function buildApprovals(): ApprovalStep[] {
   const steps: Array<Omit<ApprovalStep, 'stepId'>> = [
     // 2026-06 — fully approved and locked.
-    { periodId: '2026-06', step: 'Submit', actorUserId: 'U-OE1', decision: 'Submitted', comment: 'All 26 working days entered.', timestamp: '2026-07-16T06:20:00.000Z' },
-    { periodId: '2026-06', step: 'HOD', actorUserId: 'U-HOD', decision: 'Signed', comment: 'Checked against the batch register.', timestamp: '2026-07-17T05:10:00.000Z' },
-    { periodId: '2026-06', step: 'Ops', actorUserId: 'U-OPS', decision: 'Approved', comment: 'Total marking reviewed. Released to Finance.', timestamp: '2026-07-18T06:00:00.000Z' },
+    { periodId: '2026-06', step: 'Submit', actorUserId: 'U-40009525', decision: 'Submitted', comment: 'All 26 working days entered.', timestamp: '2026-07-16T06:20:00.000Z' },
+    { periodId: '2026-06', step: 'HOD', actorUserId: 'U-40009560', decision: 'Signed', comment: 'Checked against the batch register.', timestamp: '2026-07-17T05:10:00.000Z' },
+    { periodId: '2026-06', step: 'Ops', actorUserId: 'U-40006991', decision: 'Approved', comment: 'Total marking reviewed. Released to Finance.', timestamp: '2026-07-18T06:00:00.000Z' },
 
     // 2026-07 — signed, waiting for the Operations Manager.
-    { periodId: '2026-07', step: 'Submit', actorUserId: 'U-OE2', decision: 'Submitted', comment: '', timestamp: '2026-08-16T06:05:00.000Z' },
-    { periodId: '2026-07', step: 'HOD', actorUserId: 'U-HOD', decision: 'Signed', comment: '', timestamp: '2026-08-17T04:55:00.000Z' },
+    { periodId: '2026-07', step: 'Submit', actorUserId: 'U-40007649', decision: 'Submitted', comment: '', timestamp: '2026-08-16T06:05:00.000Z' },
+    { periodId: '2026-07', step: 'HOD', actorUserId: 'U-40009560', decision: 'Signed', comment: '', timestamp: '2026-08-17T04:55:00.000Z' },
 
     // 2026-08 — submitted, returned with a comment, resubmitted, still unsigned.
-    { periodId: MAIN_PERIOD_ID, step: 'Submit', actorUserId: 'U-OE1', decision: 'Submitted', comment: '', timestamp: '2026-09-16T06:10:00.000Z' },
-    { periodId: MAIN_PERIOD_ID, step: 'HOD', actorUserId: 'U-HOD', decision: 'Returned', comment: 'Dispersion rows for 28 Aug look short against the batch register. Please check before I sign.', timestamp: '2026-09-17T05:25:00.000Z' },
-    { periodId: MAIN_PERIOD_ID, step: 'Submit', actorUserId: 'U-OE1', decision: 'Submitted', comment: 'Dispersion rows for 28 Aug corrected from the batch register.', timestamp: '2026-09-18T07:40:00.000Z' },
+    { periodId: MAIN_PERIOD_ID, step: 'Submit', actorUserId: 'U-40009525', decision: 'Submitted', comment: '', timestamp: '2026-09-16T06:10:00.000Z' },
+    { periodId: MAIN_PERIOD_ID, step: 'HOD', actorUserId: 'U-40009560', decision: 'Returned', comment: 'Dispersion rows for 28 Aug look short against the batch register. Please check before I sign.', timestamp: '2026-09-17T05:25:00.000Z' },
+    { periodId: MAIN_PERIOD_ID, step: 'Submit', actorUserId: 'U-40009525', decision: 'Submitted', comment: 'Dispersion rows for 28 Aug corrected from the batch register.', timestamp: '2026-09-18T07:40:00.000Z' },
   ]
 
   return steps.map((step, index) => ({ stepId: `AP-${String(index + 1).padStart(3, '0')}`, ...step }))
@@ -425,7 +425,7 @@ function buildMonthOverrides(): MonthOverride[] {
       empId: 4113,
       score: 20,
       reason: 'Extraordinary performance — ran the line single-handed through the 28–30 Aug breakdown.',
-      grantedBy: 'U-HOD',
+      grantedBy: 'U-40009560',
       grantedAt: '2026-09-15T11:00:00.000Z',
       mdReviewed: false,
     },
@@ -506,7 +506,7 @@ function buildAuditLog(
   if (dayOverride) {
     add({
       timestamp: dayOverride.updatedAt ?? dayOverride.enteredAt,
-      userId: dayOverride.updatedBy ?? 'U-HOD',
+      userId: dayOverride.updatedBy ?? 'U-40009560',
       entity: 'DailyEntry',
       entityId: dayOverride.entryId,
       field: 'Score override',
@@ -540,7 +540,7 @@ function buildAuditLog(
     const oldValue = round((entry.actualBatches ?? 0) * rng.float(0.7, 0.95), 2)
     add({
       timestamp: `${entry.date}T${String(rng.int(13, 16)).padStart(2, '0')}:${String(rng.int(0, 59)).padStart(2, '0')}:00.000Z`,
-      userId: rng.chance(0.75) ? 'U-OE1' : 'U-HOD',
+      userId: rng.chance(0.75) ? 'U-40009525' : 'U-40009560',
       entity: 'DailyEntry',
       entityId: entry.entryId,
       field: `Output Batch — Emp ${entry.empId} ${employee?.name ?? ''}`,

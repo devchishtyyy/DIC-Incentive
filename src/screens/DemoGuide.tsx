@@ -28,13 +28,11 @@ const ACCEPTANCE = [
 ]
 
 const ROLE_HINTS: Array<{ role: RoleId; hint: string }> = [
-  { role: 'OFFICE_EXEC', hint: 'Enter Output Batches, confirm warnings, submit each day and submit the month.' },
-  { role: 'HOD', hint: 'Change a Daily Target with a reason, award full marks, sign off or return the month.' },
-  { role: 'OPS_MANAGER', hint: 'Approve the month once the HOD has signed, return it, or reopen a locked month.' },
-  { role: 'FINANCE', hint: 'Export an approved period to CSV or Excel. Read-only everywhere else.' },
-  { role: 'EHS_REP', hint: 'Read-only on the scorecard. No Phase 1 action, and no access to the audit log or export.' },
-  { role: 'MD_CEO', hint: 'Approve an addition to the incentive list, review a full-marks award, reopen a locked month.' },
-  { role: 'ADMIN', hint: 'Sync the SAP directory, pick who joins the incentive list, maintain points and settings.' },
+  { role: 'DATA_ENTRY', hint: 'Enter Output Batches and period marks, confirm warnings, submit each day and the month.' },
+  { role: 'TARGET_SET', hint: 'Set the default Daily Targets and change one for a date, with a reason.' },
+  { role: 'REVIEW_APPROVE', hint: 'Sign off or return the month, approve and lock it, reopen it, approve people and rates.' },
+  { role: 'VIEWER', hint: 'Read the scorecard and download an approved export. Changes nothing.' },
+  { role: 'SUPER_ADMIN', hint: 'Everything, plus looking through any other role from the account menu.' },
 ]
 
 export default function DemoGuide() {
@@ -57,13 +55,13 @@ export default function DemoGuide() {
       <div className="card card-pad mb-5">
         <h2 className="text-sm font-semibold text-ink-800">Test each role</h2>
         <p className="mt-1 text-xs text-ink-500">
-          You are signed in as <strong>{user.name}</strong> ({ROLE_LABELS[user.role]}). Click a role to switch straight to that account.
+          You are signed in as <strong>{user.name}</strong> ({user.roles.map((role) => ROLE_LABELS[role]).join(' · ')}). Click a role to switch straight to that account.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {ROLE_HINTS.map(({ role, hint }) => {
-            const candidate = state.users.find((u) => u.role === role)
+            const candidate = state.users.find((u) => u.roles.includes(role))
             if (!candidate) return null
-            const active = user.role === role
+            const active = user.roles.includes(role)
             return (
               <button
                 key={role}
