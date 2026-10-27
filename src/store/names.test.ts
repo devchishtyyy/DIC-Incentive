@@ -11,7 +11,7 @@ import type { DailyEntry } from '../domain/types'
 import { buildBaseState } from '../data/seed'
 import { awaitingSapDetail, PLANT_ROSTER } from '../data/plantMasters'
 import { can } from '../domain/permissions'
-import { displayName } from './selectors'
+import { displayName, userForSapUsername } from './selectors'
 import { applyWrite } from './writes'
 
 const hod = { actorUserId: 'U-HOD', now: '2026-10-08T09:00:00.000Z' }
@@ -206,5 +206,62 @@ describe('who may type a name', () => {
   it('always explains why it said no', () => {
     expect(can('FINANCE', 'employee.setName', {}).reason).not.toBe('')
     expect(can('OFFICE_EXEC', 'employee.setName', { hasName: true }).reason).toContain('System Admin')
+  })
+})
+
+// ---------------------------------------------------------------------------
+
+describe('linking a SAP sign-in to an app account', () => {
+  const admin = { actorUserId: 'U-ADM', now: '2026-10-27T09:00:00.000Z' }
+  const base = buildBaseState()
+
+  it('nobody is linked until somebody links them', () => {
+    expect(base.users.every((user) => user.sapUsername === undefined)).toBe(true)
+    expect(userForSapUsername(base, '10001234@packagesli')).toBeNull()
+  })
+
+  it('resolves a verified username to its account', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
+    expect(userForSapUsername(linked, '10001234@packagesli')?.userId).toBe('U-HOD')
+  })
+
+  it('matches with or without the suffix, and whatever the case', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
+    expect(userForSapUsername(linked, '10001234')?.userId).toBe('U-HOD')
+    expect(userForSapUsername(linked, '10001234@PACKAGESLI')?.userId).toBe('U-HOD')
+  })
+
+  it('strips a suffix somebody pasted in', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234@packagesli' }, admin).state
+    expect(linked.users.find((u) => u.userId === 'U-HOD')!.sapUsername).toBe('10001234')
+  })
+
+  it('REFUSES to link one sign-in to two accounts, which would make the role ambiguous', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
+    const clash = applyWrite(linked, { kind: 'user.setSapUsername', userId: 'U-ADM', sapUsername: '10001234' }, admin)
+
+    expect(clash.state).toBe(linked)
+    expect(clash.message).toContain('already linked')
+    expect(userForSapUsername(clash.state, '10001234')?.userId).toBe('U-HOD')
+  })
+
+  it('audits the link, because it decides what somebody can do', () => {
+    const result = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin)
+    expect(result.logs).toHaveLength(1)
+    expect(result.logs[0].entity).toBe('User')
+    expect(result.logs[0].newValue).toBe('10001234')
+  })
+
+  it('can be unlinked, and then that sign-in reaches nothing', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
+    const unlinked = applyWrite(linked, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '' }, admin).state
+    expect(userForSapUsername(unlinked, '10001234')).toBeNull()
+  })
+
+  it('never resolves an empty username to somebody', () => {
+    const linked = applyWrite(base, { kind: 'user.setSapUsername', userId: 'U-HOD', sapUsername: '10001234' }, admin).state
+    expect(userForSapUsername(linked, '')).toBeNull()
+    expect(userForSapUsername(linked, '   ')).toBeNull()
+    expect(userForSapUsername(linked, '@packagesli')).toBeNull()
   })
 })

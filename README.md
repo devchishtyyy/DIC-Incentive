@@ -255,6 +255,47 @@ Settings → **Weekly roster sync** shows the schedule, last result and next run
 **Sync now** button. A sync that returns fewer than half the people already on file is
 refused as a likely fault rather than applied, and a failure backs off for an hour.
 
+### Signing in
+
+Staff sign in with their **SuccessFactors password**. The server posts it to the tenant
+with Basic auth and reports back yes or no:
+
+```
+POST /api/auth/login  { username, password }
+      │
+      └─ GET https://api44.sapsf.com/odata/v2/Background_Community?$top=1
+         Authorization: Basic <username@packagesli:password>
+
+         200 → valid     401 → wrong      403 → valid, no API permission
+```
+
+The **`@packagesli` suffix is added by the server**, not typed: without it SAP answers 401,
+and nobody on a factory floor should have to know that. Somebody who types it anyway is
+not punished for it.
+
+**The password is never stored.** It lives in a form field until the answer comes back and
+in server memory for one request — not in `localStorage`, not in the audit trail, not in
+the log. Only a *failed* username is printed to the console, so a locked-out person can be
+helped. Verified by grepping the server log after a sign-in.
+
+Three things this deliberately does not do:
+
+- **A 200 that is not OData is not a sign-in.** A captive portal or corporate proxy
+  answering 200 with its own login page would otherwise let everybody in.
+- **A 403 is not waved through.** Valid credentials with no permission on the check entity
+  is a question for IT, not a reason to admit somebody.
+- **A verified username does not confer a role.** The check endpoint returns an empty
+  result set — it proves *who* somebody is and says nothing about what they may do. The
+  role is this app's to decide: the Admin links a SAP username to an account on
+  People → Users, one sign-in to one account, and an unlinked sign-in is told so plainly
+  rather than given a role by guesswork. (The sign-in username is also a different
+  identifier from the Emp ID on the incentive list — `10001234` rather than `4000xxxx` —
+  so there is nothing to derive it from.)
+
+Sign-in needs `npm run dev`, for the same reason the roster sync does. The test accounts
+remain behind a disclosure on the login screen: there is no other way in until the links
+exist, and a demo has to be able to show every role.
+
 #### Where the credentials live
 
 **On the server. Never in the browser.**

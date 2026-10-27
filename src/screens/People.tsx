@@ -959,12 +959,19 @@ function UsersTab() {
         </GuardedButton>
       </div>
 
-      <div className="card overflow-hidden">
+      <InfoNote>
+        <strong>Signs in as</strong> is the SuccessFactors username — usually an employee number — that this account is
+        reached by. A password checked against SAP proves who somebody is; it says nothing about what they may do here,
+        so the role is set in this app and an unlinked sign-in cannot get in at all.
+      </InfoNote>
+
+      <div className="card mt-3 overflow-hidden">
         <table className="w-full border-collapse">
           <thead>
             <tr>
               <th scope="col" className="th">Name</th>
               <th scope="col" className="th w-56">Role</th>
+              <th scope="col" className="th w-56">Signs in as</th>
               <th scope="col" className="th w-28 text-right">Edit</th>
             </tr>
           </thead>
@@ -973,6 +980,9 @@ function UsersTab() {
               <tr key={user.userId}>
                 <td className="td font-medium">{user.name}</td>
                 <td className="td text-ink-600">{ROLE_LABELS[user.role]}</td>
+                <td className="td">
+                  <SapUsernameCell user={user} />
+                </td>
                 <td className="td text-right">
                   <GuardedButton decision={decision} size="sm" variant="default" onClick={() => setEditing({ user, isNew: false })}>
                     Edit
@@ -1208,5 +1218,58 @@ function DepartmentsTab() {
         </table>
       </div>
     </>
+  )
+}
+
+
+/**
+ * The SAP username one account signs in with. Typed in place, like a name.
+ *
+ * The suffix is stripped on save, so pasting `10009671@packagesli` out of an email works
+ * as well as typing the number.
+ */
+function SapUsernameCell({ user }: { user: User }) {
+  const { allow, write } = useApp()
+  const decision = allow('masterdata.manage')
+  const [draft, setDraft] = useState(user.sapUsername ?? '')
+
+  useEffect(() => setDraft(user.sapUsername ?? ''), [user.sapUsername])
+
+  const dirty = draft.trim() !== (user.sapUsername ?? '')
+  const commit = () => {
+    if (dirty) write({ kind: 'user.setSapUsername', userId: user.userId, sapUsername: draft })
+  }
+
+  if (!decision.allowed) {
+    return user.sapUsername ? (
+      <span className="font-mono text-xs text-ink-700">{user.sapUsername}</span>
+    ) : (
+      <Tooltip label="Nobody can sign in to this account with SAP until the Admin links a username.">
+        <span className="text-xs text-ink-400 italic">not linked</span>
+      </Tooltip>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        className={`input py-1 font-mono text-xs ${dirty ? 'border-brand-400' : ''}`}
+        value={draft}
+        placeholder="not linked"
+        aria-label={`SAP username for ${user.name}`}
+        autoComplete="off"
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          } else if (event.key === 'Escape') {
+            setDraft(user.sapUsername ?? '')
+          }
+        }}
+      />
+      {dirty && <Icon name="check" className="h-3.5 w-3.5 shrink-0 text-brand-600" />}
+    </div>
   )
 }

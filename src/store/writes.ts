@@ -75,6 +75,7 @@ export type WriteOp =
   // Settings
   | { kind: 'settings.update'; patch: Partial<AppSettings> }
   | { kind: 'period.ensure'; today: IsoDate }
+  | { kind: 'user.setSapUsername'; userId: string; sapUsername: string }
   // Department marks, attendance, submitted totals
   | { kind: 'deptMarks.set'; periodId: string; departmentId: string; patch: Partial<DepartmentMarks> }
   | { kind: 'attendance.setMany'; periodId: string; rows: Array<{ empId: number; daysAbsent: number | null }> }
@@ -1182,6 +1183,30 @@ export function applyWrite(state: AppState, op: WriteOp, ctx: WriteContext): Wri
           created.length === 1
             ? `${created[0].label} is now open.`
             : `${created.length} periods opened, up to ${created[created.length - 1].label}.`,
+      }
+    }
+
+    case 'user.setSapUsername': {
+      const user = state.users.find((u) => u.userId === op.userId)
+      if (!user) return { state, logs: [], message: '' }
+
+      const next = op.sapUsername.trim().split('@')[0]
+      if ((user.sapUsername ?? '') === next) return { state, logs: [], message: '' }
+
+      // Two accounts on one sign-in would make the role ambiguous, and the app would pick
+      // whichever came first in the list — so it is refused rather than resolved.
+      const clash = next
+        ? state.users.find((u) => u.userId !== op.userId && (u.sapUsername ?? '').trim().toLowerCase() === next.toLowerCase())
+        : undefined
+      if (clash) {
+        return { state, logs: [], message: `${next} is already linked to ${clash.name}. One sign-in, one account.` }
+      }
+
+      audit('User', op.userId, `SAP sign-in — ${user.name}`, user.sapUsername ?? '', next)
+      return {
+        state: { ...state, users: state.users.map((u) => (u.userId === op.userId ? { ...u, sapUsername: next || undefined } : u)) },
+        logs,
+        message: next ? `${user.name} signs in as ${next}.` : `${user.name} can no longer sign in with SAP.`,
       }
     }
 

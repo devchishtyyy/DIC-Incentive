@@ -37,6 +37,7 @@ import type {
   KpiOverride,
   MonthPeriod,
   PeriodSnapshotRow,
+  User,
   RateGroup,
   Point,
 } from '../domain/types'
@@ -809,4 +810,26 @@ export function snapshotRowsFor(state: AppState, periodId: string): PeriodSnapsh
     earned: row.earned,
     band: row.band,
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Sign-in
+// ---------------------------------------------------------------------------
+
+/** `10009671@packagesli` → `10009671`. Matching ignores the tenant suffix and case. */
+export function bareUsername(username: string): string {
+  return username.trim().toLowerCase().split('@')[0]
+}
+
+/**
+ * The app account a verified SuccessFactors username belongs to.
+ *
+ * Null when nobody has linked it. That is deliberately a dead end rather than a default
+ * role: SAP has confirmed who somebody is, not what they are allowed to do, and guessing
+ * the second from the first is how somebody ends up approving their own month.
+ */
+export function userForSapUsername(state: AppState, username: string): User | null {
+  const bare = bareUsername(username)
+  if (!bare) return null
+  return state.users.find((user) => user.sapUsername && bareUsername(user.sapUsername) === bare) ?? null
 }

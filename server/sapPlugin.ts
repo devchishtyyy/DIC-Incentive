@@ -5,9 +5,11 @@
  * sees the client ID, the company ID or the signing key, and it never holds a bearer
  * token — the three-step OAuth exchange happens here, in Node, where the key lives.
  *
- *   GET /api/sap/status   → { configured, apiServer, range }   (no secrets, ever)
- *   GET /api/sap/roster   → { ok: true, users: [...] }
+ *   GET  /api/sap/status  → { configured, apiServer, range }   (no secrets, ever)
+ *   GET  /api/sap/roster  → { ok: true, users: [...] }
  *                         → { ok: false, stage, message, detail }  on failure
+ *   POST /api/auth/login  → { ok: true, username }   password checked against SAP
+ *                         → { ok: false, outcome, message }
  *
  * This replaces the old `/sapi` pass-through proxy, which made the browser run the OAuth
  * flow itself and so required the key to be shipped to it. That was the wrong shape.
@@ -15,6 +17,7 @@
 
 import https from 'node:https'
 import type { Connect, Plugin } from 'vite'
+import { verifyCredentials } from './sapAuth'
 import {
   credentialsAreComplete,
   fetchRoster,
@@ -61,10 +64,67 @@ export function sapApiPlugin(options: SapPluginOptions): Plugin {
         // account signs it, and with what key, is none of the browser's business.
         send(response, 200, {
           configured,
+          // Sign-in needs only the tenant address, not the integration key, so it works
+          // even on a server with no roster credentials configured.
+          signInAvailable: true,
           apiServer: credentials.apiServer,
           range,
           reason: configured ? '' : 'SAP credentials are not configured on the server. Fill in .env.local and restart the dev server.',
         })
+      })
+
+      /*
+       * Sign-in.
+       *
+       * The browser posts a username and password and gets back yes or no. It never holds
+       * a token, and the password is in memory here for one request: not stored, not
+       * logged, not audited. Only the username — which is not a secret — ever appears in
+       * the console, and only when a sign-in fails, so a locked-out person can be helped.
+       */
+      server.middlewares.use('/api/auth/login', async (request, response) => {
+        if (request.method !== 'POST') {
+          send(response, 405, { ok: false, outcome: 'unavailable', message: 'POST only.' })
+          return
+        }
+
+        let body = ''
+        try {
+          await new Promise<void>((resolve, reject) => {
+            request.on('data', (chunk: Buffer) => {
+              body += chunk.toString('utf8')
+              // A sign-in is two short strings; anything larger is not one.
+              if (body.length > 4096) reject(new Error('Request too large'))
+            })
+            request.on('end', () => resolve())
+            request.on('error', reject)
+          })
+        } catch {
+          send(response, 400, { ok: false, outcome: 'rejected', message: 'Could not read the sign-in request.' })
+          return
+        }
+
+        let parsed: { username?: string; password?: string }
+        try {
+          parsed = JSON.parse(body || '{}')
+        } catch {
+          send(response, 400, { ok: false, outcome: 'rejected', message: 'Sign-in request was not JSON.' })
+          return
+        }
+
+        const result = await verifyCredentials(parsed.username ?? '', parsed.password ?? '', credentials.apiServer, agent)
+
+        if (result.outcome !== 'ok') {
+          // eslint-disable-next-line no-console
+          console.log(`  Sign-in ${result.outcome} for ${result.username || '(no username)'}`)
+          send(response, result.outcome === 'rejected' ? 401 : 502, {
+            ok: false,
+            outcome: result.outcome,
+            message: result.message,
+          })
+          return
+        }
+
+        send(response, 200, { ok: true, username: result.username })
       })
 
       server.middlewares.use('/api/sap/roster', async (_request, response) => {

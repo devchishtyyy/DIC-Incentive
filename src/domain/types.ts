@@ -51,6 +51,16 @@ export interface User {
   userId: string
   name: string
   role: RoleId
+  /**
+   * The SuccessFactors username this account signs in with, without the `@packagesli`
+   * suffix — usually their employee number.
+   *
+   * Kept here rather than derived, because the sign-in username and the Emp ID on the
+   * incentive list are different identifiers: a verified sign-in of `10009671` says who
+   * somebody is, and nothing at all about what they may do. The role is this app's to
+   * decide, so the Admin links the two and an unlinked account cannot get in.
+   */
+  sapUsername?: string
 }
 
 // ---------------------------------------------------------------------------

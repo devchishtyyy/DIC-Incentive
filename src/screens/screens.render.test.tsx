@@ -141,20 +141,41 @@ describe('the HOD sees the whole plant', () => {
 })
 
 describe('the login screen', () => {
-  it('offers every test account, grouped, with no password field', () => {
+  const render = () => {
     installStorage({ userId: 'U-OE1', periodId: '2026-09' })
-    const html = renderToStaticMarkup(
+    return renderToStaticMarkup(
       <AppProvider>
         <StaticRouter location="/">
           <Login />
         </StaticRouter>
       </AppProvider>,
     )
-    for (const user of USERS) expect(html, user.name).toContain(user.name)
-    expect(html).toContain('Choose a test account')
-    expect(html).toContain('Daily work')
-    expect(html).toContain('Review and approval')
-    expect(html).not.toContain('type="password"')
+  }
+
+  it('asks for an employee number and a password', () => {
+    const html = render()
+    expect(html).toContain('type="password"')
+    expect(html).toContain('Employee number')
+    expect(html).toContain('Sign in with your SuccessFactors account')
+  })
+
+  it('says the suffix is added for you, so nobody types it', () => {
+    expect(render()).toContain('@packagesli')
+  })
+
+  it('promises not to keep the password, which it does not', () => {
+    expect(render()).toContain('not stored anywhere by this app')
+  })
+
+  it('still offers the test accounts, behind a disclosure', () => {
+    const html = render()
+    expect(html).toContain('Sign in as a test account')
+    // Collapsed by default: the real sign-in is the one on offer.
+    expect(html).not.toContain('Daily work')
+  })
+
+  it('never renders a password value into the markup', () => {
+    expect(render()).not.toContain('Pkgs@')
   })
 })
 
