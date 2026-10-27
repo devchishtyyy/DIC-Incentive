@@ -6,11 +6,12 @@
   "description": "DIC Pakistan Limited \u2014 Production Incentive App, Phase 1 (Daily Target / Output Batch)",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:backend",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "build:backend": "esbuild server/backend.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=backend/server.js"
   },
   "dependencies": {
     "react": "^19.1.1",

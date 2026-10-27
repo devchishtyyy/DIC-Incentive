@@ -29,42 +29,45 @@ Put `web.config` in the site root. It is in this repo, so a `git pull` keeps it 
 ## Running it
 
 ```powershell
+npm run build
 pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-`pm2 save` writes the process list so it comes back after a reboot — on Windows that also
-needs `pm2-installer` or a scheduled task, since PM2 has no native Windows startup hook.
+Two apps, matching the asset-disposal pattern already on this server:
 
-After a `git pull`:
+| App | Script | Port |
+|---|---|---|
+| `dic-incentive-backend` | `./backend/server.js` | 6004 |
+| `dic-incentive-frontend` | `./frontend-server.js` | 6005 |
+
+`backend/server.js` is **built**, not committed — `npm run build` bundles it from
+`server/backend.ts`. So a `git pull` alone is not enough:
 
 ```powershell
+git pull
 npm install
-pm2 restart dic-incentive
+npm run build
+pm2 restart dic-incentive-backend dic-incentive-frontend
 ```
 
-PM2 runs `server/serve.mjs` rather than `npm run dev`. Both start the same server on the
-same port; the wrapper exists only so the process **stops** properly. PM2 on Windows asks
-a process to quit by sending it a `shutdown` message rather than a signal, and Vite's CLI
-listens for neither — so `pm2 stop` reports success while the old server keeps hold of
-6004, and the next start silently fails to bind. Verified here: the port was still
-occupied after a stop until the wrapper was added.
+`pm2 save` writes the list so it survives a reboot; on Windows that also needs
+`pm2-installer` or a scheduled task, since PM2 has no native Windows startup hook.
 
 ## Checking it
 
 ```powershell
-curl http://localhost:6004/api/sap/status    # should be JSON
-curl http://localhost:6004/                  # should be HTML
+curl http://localhost:6004/api/health        # backend  — JSON
+curl http://localhost:6005/                  # frontend — HTML
 ```
 
-If the first returns HTML, IIS is sending `/api/*` to the wrong place — check the API rule.
+Through IIS, `/api/health` should return JSON. If it returns HTML, the Frontend rule is
+catching it before the API rule — check the rule order.
 
-## Changing the port
+## Changing the ports
 
-`vite.config.ts` reads `DIC_PORT`; the default is 6004. Change it **and** both URLs in
-`web.config` together. The app now refuses to start if the port is taken rather than
-quietly moving to the next one, which behind a proxy would just look like the app being
-down.
+6004 and 6005 appear in `ecosystem.config.cjs` and in `web.config`. Change them together
+or the proxy forwards to nothing.
 
 ## Worth knowing
 
