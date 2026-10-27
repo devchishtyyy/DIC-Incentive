@@ -18,7 +18,7 @@ import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
 import tls from 'node:tls'
-import { LoginThrottle, throttleKeys } from './loginThrottle'
+import { callerAddress, LoginThrottle, throttleKeys } from './loginThrottle'
 import { verifyCredentials } from './sapAuth'
 import { credentialsAreComplete, fetchRoster, SapError } from './sapRoster'
 
@@ -188,7 +188,7 @@ const server = http.createServer((request, response) => {
         }
 
         const username = parsed.username ?? ''
-        const keys = throttleKeys(username, request.socket?.remoteAddress)
+        const keys = throttleKeys(username, callerAddress(request.socket?.remoteAddress, request.headers['x-forwarded-for']))
 
         /*
          * Refuse before SAP is ever called. The tenant has its own lockout policy, so an

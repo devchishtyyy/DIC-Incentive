@@ -76,5 +76,7 @@ or the proxy forwards to nothing.
 - **Data is in each person's browser**, not on the server — see
   [SECURITY.md](SECURITY.md). Two people do not share a view, and clearing browser data
   loses that person's entries. Moving the state onto the server is the next real step.
-- **The sign-in throttle counts per caller.** `preserveHostHeader` in `web.config` passes
-  the real client address through; without it every user shares one budget.
+- **The sign-in throttle counts the real client**, read from `X-Forwarded-For`, which ARR
+  sets by default — nothing extra is needed in `web.config`. The header is trusted only on
+  a loopback connection, which is the only way a request can arrive, since both servers
+  bind `127.0.0.1`.

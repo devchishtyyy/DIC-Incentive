@@ -17,7 +17,7 @@
 
 import https from 'node:https'
 import type { Connect, Plugin } from 'vite'
-import { LoginThrottle, throttleKeys } from './loginThrottle'
+import { callerAddress, LoginThrottle, throttleKeys } from './loginThrottle'
 import { verifyCredentials } from './sapAuth'
 import {
   credentialsAreComplete,
@@ -116,7 +116,7 @@ export function sapApiPlugin(options: SapPluginOptions): Plugin {
         }
 
         const username = parsed.username ?? ''
-        const keys = throttleKeys(username, request.socket?.remoteAddress)
+        const keys = throttleKeys(username, callerAddress(request.socket?.remoteAddress, request.headers['x-forwarded-for']))
 
         /*
          * Refuse before SAP is ever called. That is the point: it stops a guessing attack

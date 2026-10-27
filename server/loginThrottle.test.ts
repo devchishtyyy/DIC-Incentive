@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_THROTTLE, LoginThrottle, throttleKeys } from './loginThrottle'
+import { callerAddress, DEFAULT_THROTTLE, LoginThrottle, throttleKeys } from './loginThrottle'
 
 const NOW = 1_800_000_000_000
 
@@ -166,5 +166,46 @@ describe('the settings are the ones intended', () => {
     expect(DEFAULT_THROTTLE.maxFailures).toBe(5)
     expect(DEFAULT_THROTTLE.windowMs).toBe(15 * 60 * 1000)
     expect(DEFAULT_THROTTLE.lockoutMs).toBe(15 * 60 * 1000)
+  })
+})
+
+describe('who the throttle counts behind IIS', () => {
+  it('counts the real client, not the proxy', () => {
+    // Every connection from IIS looks like 127.0.0.1; without this the whole company
+    // would share one budget and five bad passwords would lock out the site.
+    expect(callerAddress('127.0.0.1', '10.20.30.40')).toBe('10.20.30.40')
+    expect(callerAddress('::1', '10.20.30.40')).toBe('10.20.30.40')
+    expect(callerAddress('::ffff:127.0.0.1', '10.20.30.40')).toBe('10.20.30.40')
+  })
+
+  it('takes the original client from a chain of proxies', () => {
+    expect(callerAddress('127.0.0.1', '10.20.30.40, 172.16.0.1, 192.168.1.1')).toBe('10.20.30.40')
+  })
+
+  it('IGNORES THE HEADER FROM A CALLER THAT IS NOT THE PROXY', () => {
+    // Otherwise anybody reaching the port directly could invent a fresh address on every
+    // attempt and never be throttled at all.
+    expect(callerAddress('203.0.113.9', '10.20.30.40')).toBe('203.0.113.9')
+  })
+
+  it('falls back to the socket when there is no header', () => {
+    expect(callerAddress('127.0.0.1', undefined)).toBe('127.0.0.1')
+    expect(callerAddress('127.0.0.1', '')).toBe('127.0.0.1')
+    expect(callerAddress('127.0.0.1', '   ')).toBe('127.0.0.1')
+  })
+
+  it('copes with a repeated header, which arrives as an array', () => {
+    expect(callerAddress('127.0.0.1', ['10.20.30.40', '10.0.0.1'])).toBe('10.20.30.40')
+  })
+
+  it('keeps two people behind the same proxy in separate budgets', () => {
+    const throttle = new LoginThrottle()
+    const a = throttleKeys('10001111', callerAddress('127.0.0.1', '10.20.30.40'))
+    const b = throttleKeys('10002222', callerAddress('127.0.0.1', '10.20.30.99'))
+
+    for (let i = 0; i < DEFAULT_THROTTLE.maxFailures; i += 1) throttle.recordFailure(a, NOW)
+
+    expect(throttle.check(a, NOW).allowed).toBe(false)
+    expect(throttle.check(b, NOW).allowed).toBe(true)
   })
 })

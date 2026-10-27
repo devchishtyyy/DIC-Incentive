@@ -134,3 +134,31 @@ export function throttleKeys(username: string, remoteAddress: string | undefined
   if (remoteAddress) keys.push(`addr:${remoteAddress}`)
   return keys
 }
+
+/**
+ * Who is actually making this request.
+ *
+ * Behind IIS every connection arrives from `127.0.0.1`, so counting the socket address
+ * would put the whole company in one bucket: five bad passwords from one person would
+ * lock out everybody. ARR puts the original client in `X-Forwarded-For`, so that is what
+ * gets counted.
+ *
+ * It is only trusted when the connection itself came from loopback — which is the only
+ * way it can arrive, since both servers bind `127.0.0.1` and IIS is the sole caller. A
+ * header from a direct caller is attacker-controlled and would let somebody dodge the
+ * throttle by inventing a new address each attempt, so in that case it is ignored.
+ */
+export function callerAddress(
+  remoteAddress: string | undefined,
+  forwardedFor: string | string[] | undefined,
+): string | undefined {
+  const loopback = remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1'
+  if (!loopback) return remoteAddress
+
+  const header = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor
+  if (!header) return remoteAddress
+
+  // `X-Forwarded-For: client, proxy1, proxy2` — the first entry is the original client.
+  const client = header.split(',')[0]?.trim()
+  return client || remoteAddress
+}
