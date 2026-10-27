@@ -28,8 +28,12 @@ Put `web.config` in the site root. It is in this repo, so a `git pull` keeps it 
 
 ## Running it
 
+**Build first, every time.** Neither script PM2 runs is in git: `backend/server.js` is
+bundled from `server/backend.ts`, and `dist/` is the built frontend. A fresh clone has
+neither, so `pm2 start` on its own fails with `Script not found: ...ackend\server.js`.
+
 ```powershell
-npm run build
+npm run deploy                     # npm ci && npm run build
 pm2 start ecosystem.config.cjs
 pm2 save
 ```
@@ -41,18 +45,21 @@ Two apps, matching the asset-disposal pattern already on this server:
 | `dic-incentive-backend` | `./backend/server.js` | 6004 |
 | `dic-incentive-frontend` | `./frontend-server.js` | 6005 |
 
-`backend/server.js` is **built**, not committed — `npm run build` bundles it from
-`server/backend.ts`. So a `git pull` alone is not enough:
+After a `git pull`:
 
 ```powershell
-git pull
-npm install
-npm run build
+npm run deploy
 pm2 restart dic-incentive-backend dic-incentive-frontend
 ```
 
 `pm2 save` writes the list so it survives a reboot; on Windows that also needs
 `pm2-installer` or a scheduled task, since PM2 has no native Windows startup hook.
+
+### If the backend will not start
+
+`Script not found: ...ackend\server.js` means the build has not run. `npm run deploy`.
+
+If the frontend starts but shows **"NOT BUILT"** in its log, `dist/` is missing — same fix.
 
 ## Checking it
 

@@ -1,8 +1,13 @@
 /**
  * PM2 config for the DIC Production Incentive app.
  *
- *   npm ci && npm run build
+ *   npm run deploy            <- REQUIRED FIRST. Builds backend/server.js and dist/.
  *   pm2 start ecosystem.config.cjs
+ *
+ * Neither script below is committed: `backend/server.js` is bundled from
+ * `server/backend.ts` and `dist/` is the built frontend. A clone has neither, so
+ * `pm2 start` straight after a `git pull` fails with "Script not found" — build first,
+ * every time.
  *
  * Two apps, matching the pattern already running on this server. The asset-disposal app
  * holds 6002/6003, so this one takes the next pair: backend 6004, frontend 6005. Both
