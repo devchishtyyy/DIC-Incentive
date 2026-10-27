@@ -26,13 +26,29 @@ Routing** — then switch ARR's proxy on:
 
 Put `web.config` in the site root. It is in this repo, so a `git pull` keeps it current.
 
-## Every time
+## Running it
 
 ```powershell
-npm run dev
+pm2 start ecosystem.config.cjs
+pm2 save
 ```
 
-Leave it running. `npm install && npm run dev` after a `git pull`.
+`pm2 save` writes the process list so it comes back after a reboot — on Windows that also
+needs `pm2-installer` or a scheduled task, since PM2 has no native Windows startup hook.
+
+After a `git pull`:
+
+```powershell
+npm install
+pm2 restart dic-incentive
+```
+
+PM2 runs `server/serve.mjs` rather than `npm run dev`. Both start the same server on the
+same port; the wrapper exists only so the process **stops** properly. PM2 on Windows asks
+a process to quit by sending it a `shutdown` message rather than a signal, and Vite's CLI
+listens for neither — so `pm2 stop` reports success while the old server keeps hold of
+6004, and the next start silently fails to bind. Verified here: the port was still
+occupied after a stop until the wrapper was added.
 
 ## Checking it
 

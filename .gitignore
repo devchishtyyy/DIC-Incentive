@@ -18,3 +18,4 @@ src/data/sap-users.json
 # Corporate CA certificates — specific to one network, not to the project
 certs/*
 !certs/README.md
+logs/
