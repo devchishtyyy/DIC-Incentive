@@ -22,7 +22,7 @@ import { callerAddress, LoginThrottle, throttleKeys } from './loginThrottle'
 import { verifyCredentials } from './sapAuth'
 import { credentialsAreComplete, fetchRoster, SapError } from './sapRoster'
 
-const PORT = Number(process.env.PORT) || 6004
+const PORT = Number(process.env.PORT) || 6007
 /** Loopback only: IIS is the only thing that should reach this. */
 const HOST = process.env.HOST || '127.0.0.1'
 

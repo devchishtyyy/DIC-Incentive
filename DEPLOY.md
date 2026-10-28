@@ -4,7 +4,7 @@ The app is **one process on one port**. It serves the built page and answers `/a
 itself, which is why both rewrite rules in `web.config` point at the same port.
 
 ```
-browser → IIS (443) → web.config rewrite → localhost:6004 → the app
+browser → IIS (443) → web.config rewrite → localhost:6007 (API) + localhost:6008 (frontend)
 ```
 
 ## Once
@@ -42,8 +42,8 @@ Two apps, matching the asset-disposal pattern already on this server:
 
 | App | Script | Port |
 |---|---|---|
-| `dic-incentive-backend` | `./backend/server.js` | 6004 |
-| `dic-incentive-frontend` | `./frontend-server.js` | 6005 |
+| `dic-incentive-backend` | `./backend/server.js` | 6007 |
+| `dic-incentive-frontend` | `./frontend-server.js` | 6008 |
 
 After a `git pull`:
 
@@ -64,8 +64,8 @@ If the frontend starts but shows **"NOT BUILT"** in its log, `dist/` is missing 
 ## Checking it
 
 ```powershell
-curl http://localhost:6004/api/health        # backend  — JSON
-curl http://localhost:6005/                  # frontend — HTML
+curl.exe http://127.0.0.1:6007/api/health        # backend  — JSON
+curl.exe http://127.0.0.1:6008/                  # frontend — HTML
 ```
 
 Through IIS, `/api/health` should return JSON. If it returns HTML, the Frontend rule is
@@ -73,8 +73,11 @@ catching it before the API rule — check the rule order.
 
 ## Changing the ports
 
-6004 and 6005 appear in `ecosystem.config.cjs` and in `web.config`. Change them together
+6007 and 6008 appear in `ecosystem.config.cjs` and in `web.config`. Change them together
 or the proxy forwards to nothing.
+
+6002/6003 belong to the asset-disposal app and 6004/6005 were taken too, which is why
+this one sits on 6007/6008.
 
 ## Worth knowing
 

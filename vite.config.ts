@@ -127,23 +127,19 @@ export default defineConfig(({ command, mode }) => {
     plugins: [react(), tailwindcss(), sapApiPlugin({ credentials, range, caBundle, insecureTls })],
 
     /*
-     * One server for both the frontend and /api/*, which is why web.config points both
-     * of its rewrite rules at the same port.
+     * The development server, and only that.
      *
-     * 6004 is the port IIS forwards to; set DIC_PORT to move it, and change web.config to
-     * match. It opens a browser locally and does not on the server, where there is nobody
-     * sitting at it.
+     * On the server the app is two plain Node processes started by PM2 — `backend/server.js`
+     * on 6007 and `frontend-server.js` on 6008 — and Vite is not involved at all. Nothing
+     * here affects the deployment.
      */
     server: {
-      port: Number(env.DIC_PORT) || 6004,
-      // Fail rather than quietly move to the next free port. Behind IIS a silent move
-      // means the rewrite rules forward to a dead port and the app simply looks down.
+      port: Number(env.DIC_PORT) || 5173,
+      // Fail rather than quietly move to the next free port: a dev server that is not
+      // where you left it wastes more time than a refusal to start does.
       strictPort: true,
       host: '127.0.0.1',
       open: !process.env.DIC_SERVER,
-      // IIS forwards the original Host header, so the app has to accept it. Without this
-      // Vite answers 403 to everything that did not come from localhost by name.
-      allowedHosts: env.DIC_ALLOWED_HOSTS ? env.DIC_ALLOWED_HOSTS.split(',').map((h) => h.trim()) : true,
     },
 
     test: {

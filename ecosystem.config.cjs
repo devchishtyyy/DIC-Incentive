@@ -10,8 +10,9 @@
  * every time.
  *
  * Two apps, matching the pattern already running on this server. The asset-disposal app
- * holds 6002/6003, so this one takes the next pair: backend 6004, frontend 6005. Both
- * numbers also appear in web.config — change them together.
+ * holds 6002/6003, and 6004/6005 turned out to be taken as well, so this one uses
+ * 6007 for the backend and 6008 for the frontend. Both numbers also appear in
+ * web.config — change them together.
  *
  * `backend/server.js` is produced by `npm run build`; the source is `server/backend.ts`.
  */
@@ -24,11 +25,11 @@ module.exports = {
       cwd: __dirname,
       env: {
         NODE_ENV: 'production',
-        PORT: 6004,
+        PORT: 6007,
       },
       env_development: {
         NODE_ENV: 'development',
-        PORT: 6004,
+        PORT: 6007,
       },
     },
     {
@@ -37,12 +38,12 @@ module.exports = {
       cwd: __dirname,
       env: {
         NODE_ENV: 'production',
-        PORT: 6005,
+        PORT: 6008,
         DIST_PATH: './dist',
       },
       env_development: {
         NODE_ENV: 'development',
-        PORT: 6005,
+        PORT: 6008,
         DIST_PATH: './dist',
       },
     },

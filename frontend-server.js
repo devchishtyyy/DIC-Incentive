@@ -4,7 +4,7 @@
  * Plain Node, no dependencies: it hands out the files in `dist/` and nothing else. IIS
  * sends `/api/*` to the backend on its own port, so nothing here needs to know about it.
  *
- *   PORT       the port to listen on (default 6005; must match web.config)
+ *   PORT       the port to listen on (default 6008; must match web.config)
  *   DIST_PATH  where the build is   (default ./dist)
  */
 
@@ -13,7 +13,7 @@ import fsp from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
 
-const PORT = Number(process.env.PORT) || 6005
+const PORT = Number(process.env.PORT) || 6008
 /** Loopback only: IIS is the only thing that should reach this. */
 const HOST = process.env.HOST || '127.0.0.1'
 const DIST = path.resolve(process.cwd(), process.env.DIST_PATH || './dist')
