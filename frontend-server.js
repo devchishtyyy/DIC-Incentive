@@ -87,7 +87,7 @@ function resolveAssetAnyDepth(urlPath) {
   return resolveInsideDist(urlPath.slice(at))
 }
 
-const server = http.createServer((request, response) => {
+const handler = (request, response) => {
   void (async () => {
     const urlPath = request.url ?? '/'
     let file = resolveInsideDist(urlPath)
@@ -155,39 +155,67 @@ const server = http.createServer((request, response) => {
       response.end('Internal error.')
     }
   })
-})
+}
 
-server.listen(PORT, HOST, () => {
+function announce() {
   const built = fs.existsSync(path.join(DIST, 'index.html'))
   console.log(
     `\n  DIC Production Incentive — frontend` +
-      `\n  Listening → http://${HOST}:${PORT}` +
+      `\n  Listening → ${bound.join("  ")}` +
       `\n  Serving   → ${DIST} ${built ? '' : '(NOT BUILT — run `npm run build`)'}\n`,
   )
+}
+
+/**
+ * Both loopback addresses, not just one.
+ *
+ * On Windows `localhost` resolves to `::1` before `127.0.0.1`, and IIS/ARR does not fall
+ * back to the other family the way a browser or curl does. A server bound only to
+ * `127.0.0.1` therefore looks dead to a rewrite rule that says `http://localhost:PORT` —
+ * ARR reports 502.3 and nothing in this app's log explains it, because nothing ever
+ * arrived. Binding both answers whichever `localhost` means while keeping the port off
+ * the network. Set HOST to pin it to one address.
+ */
+const HOSTS = process.env.HOST ? [process.env.HOST] : ['127.0.0.1', '::1']
+const servers = HOSTS.map(() => http.createServer(handler))
+let pending = servers.length
+const bound = []
+
+servers.forEach((server, index) => {
+  const address = HOSTS[index]
+
+  server.on('error', (error) => {
+    const code = error.code
+    if (code === 'EADDRINUSE') {
+      console.error(`\n  Port ${PORT} is already in use. Find what holds it: netstat -ano | findstr :${PORT}\n`)
+      process.exit(1)
+    }
+    // A host with IPv6 switched off cannot bind ::1, which is not a failure on its own.
+    if (address === '::1' && (code === 'EAFNOSUPPORT' || code === 'EADDRNOTAVAIL' || code === 'EINVAL')) {
+      if (--pending === 0 && bound.length === 0) process.exit(1)
+      return
+    }
+    console.error(`\n  Failed to listen on ${address}:${PORT} — ${String(error)}\n`)
+    process.exit(1)
+  })
+
+  server.listen(PORT, address, () => {
+    bound.push(address === '::1' ? `http://[::1]:${PORT}` : `http://${address}:${PORT}`)
+    if (--pending === 0) announce()
+  })
 })
 
-/*
- * A busy port is an operational fact, not a bug, so it should read like one. The default
- * is an unhandled 'error' event and a stack trace, which under PM2 becomes a crash loop
- * with the cause buried in the middle of it.
- */
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`
-  Port ${PORT} is already in use. Something else is on it — check with: netstat -ano | findstr :${PORT}
-`)
-  } else {
-    console.error(`
-  Frontend failed to start: ${String(error)}
-`)
-  }
-  process.exit(1)
-})
+const closeAll = () => {
+  let left = servers.length
+  for (const server of servers) server.close(() => { if (--left === 0) process.exit(0) })
+  setTimeout(() => process.exit(0), 5000).unref()
+}
 
 // PM2 on Windows asks a process to quit by sending a message, not a signal.
 process.on('message', (message) => {
-  if (message === 'shutdown') server.close(() => process.exit(0))
+  if (message === 'shutdown') closeAll()
 })
+
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => server.close(() => process.exit(0)))
+  process.on(signal, () => closeAll())
 }
