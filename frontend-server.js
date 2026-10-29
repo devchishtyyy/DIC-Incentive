@@ -57,9 +57,40 @@ function resolveInsideDist(urlPath) {
   return resolved
 }
 
+/**
+ * A request for a built asset, as opposed to a page.
+ *
+ * The distinction matters because the two deserve opposite treatment when the file is
+ * missing: a page should fall back to the app, an asset must not. Serving index.html for
+ * a `.js` request returns HTML with a 200, the browser refuses to execute it, and the
+ * result is a blank page with a MIME error — which reads like a routing fault and is not.
+ */
+function looksLikeAsset(urlPath) {
+  return /\.[a-z0-9]+$/i.test(urlPath.split('?')[0])
+}
+
+/**
+ * The same request, resolved as if the app were mounted at the site root.
+ *
+ * The frontend is built with `base: './'`, so the page asks for its assets relative to
+ * wherever it is being served from. Mounted at the root of a site that is fine; mounted
+ * under a path — which it must be, since another app already holds the root — every
+ * request arrives as `/whatever/assets/index-abc.js` and there is no such file.
+ *
+ * Rather than making the server know its own mount path (which IIS does not tell it),
+ * anything containing `/assets/` is retried from `dist/assets/` onwards. One directory,
+ * fingerprinted filenames, so there is nothing to collide with.
+ */
+function resolveAssetAnyDepth(urlPath) {
+  const at = urlPath.indexOf('/assets/')
+  if (at < 0) return null
+  return resolveInsideDist(urlPath.slice(at))
+}
+
 const server = http.createServer((request, response) => {
   void (async () => {
-    let file = resolveInsideDist(request.url ?? '/')
+    const urlPath = request.url ?? '/'
+    let file = resolveInsideDist(urlPath)
 
     if (file === null) {
       response.statusCode = 403
@@ -73,9 +104,30 @@ const server = http.createServer((request, response) => {
       stat = await fsp.stat(file).catch(() => null)
     }
 
-    // Anything that is not a file falls back to index.html. The app uses hash routing so
-    // this rarely arises, but a pasted deep link should land on the app, not a 404.
+    // Mounted under a path: find the asset regardless of what prefix IIS passed through.
     if (!stat?.isFile()) {
+      const anyDepth = resolveAssetAnyDepth(urlPath)
+      if (anyDepth) {
+        const found = await fsp.stat(anyDepth).catch(() => null)
+        if (found?.isFile()) {
+          file = anyDepth
+          stat = found
+        }
+      }
+    }
+
+    /*
+     * A missing asset is a 404 and says so. Only a page falls back to the app — the hash
+     * router means that rarely arises, but a pasted deep link should land on the app.
+     */
+    if (!stat?.isFile()) {
+      if (looksLikeAsset(urlPath)) {
+        response.statusCode = 404
+        response.setHeader('Content-Type', 'text/plain; charset=utf-8')
+        response.end(`Not found: ${urlPath}`)
+        return
+      }
+
       file = path.join(DIST, 'index.html')
       stat = await fsp.stat(file).catch(() => null)
       if (!stat?.isFile()) {
@@ -112,6 +164,24 @@ server.listen(PORT, HOST, () => {
       `\n  Listening → http://${HOST}:${PORT}` +
       `\n  Serving   → ${DIST} ${built ? '' : '(NOT BUILT — run `npm run build`)'}\n`,
   )
+})
+
+/*
+ * A busy port is an operational fact, not a bug, so it should read like one. The default
+ * is an unhandled 'error' event and a stack trace, which under PM2 becomes a crash loop
+ * with the cause buried in the middle of it.
+ */
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`
+  Port ${PORT} is already in use. Something else is on it — check with: netstat -ano | findstr :${PORT}
+`)
+  } else {
+    console.error(`
+  Frontend failed to start: ${String(error)}
+`)
+  }
+  process.exit(1)
 })
 
 // PM2 on Windows asks a process to quit by sending a message, not a signal.

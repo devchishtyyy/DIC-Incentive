@@ -273,6 +273,24 @@ server.listen(PORT, HOST, () => {
   )
 })
 
+/*
+ * A busy port is an operational fact, not a bug, so it should read like one. The default
+ * is an unhandled 'error' event and a stack trace, which under PM2 becomes a crash loop
+ * with the cause buried in the middle of it.
+ */
+server.on('error', (error) => {
+  if ((error as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+    console.error(`
+  Port ${PORT} is already in use. Something else is on it — check with: netstat -ano | findstr :${PORT}
+`)
+  } else {
+    console.error(`
+  API failed to start: ${String(error)}
+`)
+  }
+  process.exit(1)
+})
+
 // PM2 on Windows asks a process to quit by sending a message, not a signal.
 process.on('message', (message) => {
   if (message === 'shutdown') server.close(() => process.exit(0))
