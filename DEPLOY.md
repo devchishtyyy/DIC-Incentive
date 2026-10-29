@@ -28,38 +28,34 @@ Put `web.config` in the site root. It is in this repo, so a `git pull` keeps it 
 
 ## Running it
 
-**Build first, every time.** Neither script PM2 runs is in git: `backend/server.js` is
-bundled from `server/backend.ts`, and `dist/` is the built frontend. A fresh clone has
-neither, so `pm2 start` on its own fails with `Script not found: ...ackend\server.js`.
-
 ```powershell
-npm run deploy                     # npm ci && npm run build
+git pull
+npm install
 pm2 start ecosystem.config.cjs
 pm2 save
 ```
 
-Two apps, matching the asset-disposal pattern already on this server:
+**No build step.** `dist/` and `backend/server.js` are committed, so a pull gives a tree
+PM2 can start, the same way the other apps on this box are arranged.
 
 | App | Script | Port |
 |---|---|---|
 | `dic-incentive-backend` | `./backend/server.js` | 6007 |
 | `dic-incentive-frontend` | `./frontend-server.js` | 6008 |
 
-After a `git pull`:
+After a pull, if PM2 is already running:
 
 ```powershell
-npm run deploy
 pm2 restart dic-incentive-backend dic-incentive-frontend
 ```
 
-`pm2 save` writes the list so it survives a reboot; on Windows that also needs
-`pm2-installer` or a scheduled task, since PM2 has no native Windows startup hook.
+The frontend **also forwards `/api/*` to the backend**, at any depth. IIS splitting the
+traffic is therefore an optimisation, not a requirement: if the API rule does not fire -
+which it will not when the app is mounted under a path, because `^api/(.*)` does not match
+`dic/api/health` - the request still reaches the backend.
 
-### If the backend will not start
-
-`Script not found: ...ackend\server.js` means the build has not run. `npm run deploy`.
-
-If the frontend starts but shows **"NOT BUILT"** in its log, `dist/` is missing — same fix.
+On a development machine, `npm run dev` is unchanged and `npm run build` regenerates both
+committed artifacts. Build before committing so what ships matches the source.
 
 ## Checking it
 

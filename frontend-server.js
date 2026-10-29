@@ -1,11 +1,19 @@
 /**
- * Serves the built frontend.
+ * Serves the built frontend, and forwards `/api/*` to the backend.
  *
- * Plain Node, no dependencies: it hands out the files in `dist/` and nothing else. IIS
- * sends `/api/*` to the backend on its own port, so nothing here needs to know about it.
+ * The forwarding is the important part. IIS is meant to split the traffic itself, but its
+ * API rule only matches a URL that *starts* with `api/` - so the moment this app is
+ * mounted under a path, `/dic/api/health` falls through to the Frontend rule and arrives
+ * here instead. Without a proxy that request gets `index.html`, the app's fetch receives
+ * HTML where it expected JSON, and every call fails for no visible reason.
  *
- *   PORT       the port to listen on (default 6008; must match web.config)
- *   DIST_PATH  where the build is   (default ./dist)
+ * So this server handles `/api/*` at any depth by passing it to the backend. IIS routing
+ * it correctly becomes an optimisation rather than a requirement, which is how the other
+ * apps on this box are arranged.
+ *
+ *   PORT          the port to listen on   (default 6008; must match web.config)
+ *   BACKEND_PORT  where the API lives     (default 6007)
+ *   DIST_PATH     where the build is      (default ./dist)
  */
 
 import fs from 'node:fs'
@@ -17,6 +25,7 @@ const PORT = Number(process.env.PORT) || 6008
 /** Loopback only: IIS is the only thing that should reach this. */
 const HOST = process.env.HOST || '127.0.0.1'
 const DIST = path.resolve(process.cwd(), process.env.DIST_PATH || './dist')
+const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 6007
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -87,9 +96,61 @@ function resolveAssetAnyDepth(urlPath) {
   return resolveInsideDist(urlPath.slice(at))
 }
 
+/**
+ * Where `/api/` begins in a URL, at any depth.
+ *
+ * Returns the path from `/api/` onwards, so `/dic/api/health` and `/api/health` both
+ * forward to the backend as `/api/health`. Null when the request is not an API call.
+ */
+function apiPathOf(urlPath) {
+  if (urlPath === '/api' || urlPath.startsWith('/api/')) return urlPath
+  const at = urlPath.indexOf('/api/')
+  return at > 0 ? urlPath.slice(at) : null
+}
+
+/** Passes a request through to the backend and streams the answer back unchanged. */
+function proxyToBackend(request, response, apiPath) {
+  const upstream = http.request(
+    {
+      host: '127.0.0.1',
+      port: BACKEND_PORT,
+      path: apiPath,
+      method: request.method,
+      // Host is rewritten because the backend binds loopback; everything else passes
+      // through so X-Forwarded-For still reaches the sign-in throttle.
+      headers: { ...request.headers, host: `127.0.0.1:${BACKEND_PORT}` },
+    },
+    (backend) => {
+      response.writeHead(backend.statusCode || 502, backend.headers)
+      backend.pipe(response)
+    },
+  )
+
+  upstream.on('error', (error) => {
+    console.error(`  Could not reach the backend on ${BACKEND_PORT}: ${String(error)}`)
+    if (!response.headersSent) {
+      response.statusCode = 502
+      response.setHeader('Content-Type', 'application/json; charset=utf-8')
+      response.end(JSON.stringify({ ok: false, message: `The API is not answering on port ${BACKEND_PORT}. Check: pm2 ls` }))
+    }
+  })
+
+  request.pipe(upstream)
+}
+
 const handler = (request, response) => {
+  const incoming = request.url ?? '/'
+
+  // The API goes to the backend before anything here touches the filesystem.
+  const apiPath = apiPathOf(incoming.split('?')[0])
+  if (apiPath !== null) {
+    const query = incoming.includes('?') ? incoming.slice(incoming.indexOf('?')) : ''
+    proxyToBackend(request, response, apiPath + query)
+    return
+  }
+
   void (async () => {
-    const urlPath = request.url ?? '/'
+    const urlPath = incoming
     let file = resolveInsideDist(urlPath)
 
     if (file === null) {
